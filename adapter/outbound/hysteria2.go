@@ -5,9 +5,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/metacubex/mihomo/log"
+	"math/rand"
 	"net"
 	"runtime"
 	"strconv"
+	"time"
 
 	CN "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/ca"
@@ -28,9 +31,15 @@ func init() {
 type Hysteria2 struct {
 	*Base
 
-	option *Hysteria2Option
-	client *hysteria2.Client
-	dialer proxydialer.SingDialer
+	option         *Hysteria2Option
+	client         *hysteria2.Client
+	dialer         proxydialer.SingDialer
+	needUpdateDial bool
+	DialUpdateAt   int64
+	ListenUpdateAt int64
+	cclient        *hysteria2.Client
+	ticker         *time.Ticker
+	tickerDone     chan struct{}
 }
 
 type Hysteria2Option struct {
@@ -54,6 +63,14 @@ type Hysteria2Option struct {
 }
 
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
+
+	if h.needUpdateDial {
+		h.client = h.cclient
+		h.needUpdateDial = false
+		h.DialUpdateAt = time.Now().UnixMilli()
+		h.ListenUpdateAt = h.DialUpdateAt
+	}
+
 	options := h.Base.DialOptions(opts...)
 	h.dialer.SetDialer(dialer.NewDialer(options...))
 	c, err := h.client.DialConn(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
@@ -64,6 +81,17 @@ func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 }
 
 func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
+
+	switch {
+	case h.ListenUpdateAt == h.DialUpdateAt:
+		h.ListenUpdateAt++
+	case h.ListenUpdateAt == h.DialUpdateAt+1:
+		h.client = h.cclient
+		h.ListenUpdateAt++
+	default:
+
+	}
+
 	options := h.Base.DialOptions(opts...)
 	h.dialer.SetDialer(dialer.NewDialer(options...))
 	pc, err := h.client.ListenPacket(ctx)
@@ -77,6 +105,9 @@ func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 }
 
 func closeHysteria2(h *Hysteria2) {
+
+	h.ticker.Stop()
+	h.tickerDone <- struct{}{}
 	if h.client != nil {
 		_ = h.client.CloseWithError(errors.New("proxy removed"))
 	}
@@ -84,14 +115,14 @@ func closeHysteria2(h *Hysteria2) {
 
 func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	var salamanderPassword string
+	//var salamanderPassword string
 	if len(option.Obfs) > 0 {
 		if option.ObfsPassword == "" {
 			return nil, errors.New("missing obfs password")
 		}
 		switch option.Obfs {
 		case hysteria2.ObfsTypeSalamander:
-			salamanderPassword = option.ObfsPassword
+			//salamanderPassword = option.ObfsPassword
 		default:
 			return nil, fmt.Errorf("unknown obfs type: %s", option.Obfs)
 		}
@@ -129,15 +160,14 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 	clientOptions := hysteria2.ClientOptions{
 		Context:            context.TODO(),
 		Dialer:             singDialer,
-		ServerAddress:      M.ParseSocksaddrHostPort(option.Server, uint16(option.Port)),
+		ServerAddress:      M.ParseSocksaddrHostPort(option.Server, uint16(50005+rand.Int63n(int64(4000)))),
 		SendBPS:            StringToBps(option.Up),
 		ReceiveBPS:         StringToBps(option.Down),
-		SalamanderPassword: salamanderPassword,
+		SalamanderPassword: "",
 		Password:           option.Password,
 		TLSConfig:          tlsConfig,
 		UDPDisabled:        false,
 		CWND:               option.CWND,
-		UdpMTU:             option.UdpMTU,
 	}
 
 	client, err := hysteria2.NewClient(clientOptions)
@@ -158,8 +188,47 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		option: &option,
 		client: client,
 		dialer: singDialer,
+		ticker: time.NewTicker(30 * time.Second),
 	}
+
+	_ = outbound.createNewClient(tlsConfig)
+	go func(h *Hysteria2, tlsConfig *tls.Config) {
+		for {
+			select {
+			case <-h.ticker.C:
+				_ = h.createNewClient(tlsConfig)
+			case <-h.tickerDone:
+				log.Errorln("done the ticker")
+				return
+			}
+		}
+
+	}(outbound, tlsConfig)
+
 	runtime.SetFinalizer(outbound, closeHysteria2)
 
 	return outbound, nil
+}
+func (h *Hysteria2) createNewClient(tlsConfig *tls.Config) (err error) {
+	port := 50005 + rand.Int63n(int64(4000))
+	//singDialer := proxydialer.NewByNameSingDialer(h.option.DialerProxy, dialer.NewDialer())
+	clientOptions := hysteria2.ClientOptions{
+		Context:            context.TODO(),
+		Dialer:             h.dialer,
+		ServerAddress:      M.ParseSocksaddrHostPort(h.option.Server, uint16(port)),
+		SendBPS:            StringToBps(h.option.Up),
+		ReceiveBPS:         StringToBps(h.option.Down),
+		SalamanderPassword: "",
+		Password:           h.option.Password,
+		TLSConfig:          tlsConfig,
+		UDPDisabled:        false,
+		CWND:               h.option.CWND,
+	}
+	h.cclient, err = hysteria2.NewClient(clientOptions)
+	if err != nil {
+		return err
+	}
+	h.needUpdateDial = true
+	log.Errorln("new port%+v\n", port)
+	return err
 }
