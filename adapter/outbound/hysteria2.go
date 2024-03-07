@@ -67,8 +67,8 @@ func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 	if h.needUpdateDial {
 		h.client = h.cclient
 		h.needUpdateDial = false
-		h.DialUpdateAt = time.Now().UnixMilli()
-		h.ListenUpdateAt = h.DialUpdateAt
+		//h.DialUpdateAt = time.Now().UnixMilli()
+		//h.ListenUpdateAt = h.DialUpdateAt
 	}
 
 	options := h.Base.DialOptions(opts...)
@@ -82,15 +82,15 @@ func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 
 func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 
-	switch {
-	case h.ListenUpdateAt == h.DialUpdateAt:
-		h.ListenUpdateAt++
-	case h.ListenUpdateAt == h.DialUpdateAt+1:
-		h.client = h.cclient
-		h.ListenUpdateAt++
-	default:
-
-	}
+	//switch {
+	//case h.ListenUpdateAt == h.DialUpdateAt:
+	//	h.ListenUpdateAt++
+	//case h.ListenUpdateAt == h.DialUpdateAt+1:
+	//	h.client = h.cclient
+	//	h.ListenUpdateAt++
+	//default:
+	//
+	//}
 
 	options := h.Base.DialOptions(opts...)
 	h.dialer.SetDialer(dialer.NewDialer(options...))
@@ -185,10 +185,11 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
+
 		option: &option,
 		client: client,
 		dialer: singDialer,
-		ticker: time.NewTicker(30 * time.Second),
+		ticker: time.NewTicker(20 * time.Second),
 	}
 
 	_ = outbound.createNewClient(tlsConfig)
@@ -224,7 +225,7 @@ func (h *Hysteria2) createNewClient(tlsConfig *tls.Config) (err error) {
 		UDPDisabled:        false,
 		CWND:               h.option.CWND,
 	}
-	h.cclient, err = hysteria2.NewClient(clientOptions)
+	h.cclient, err = hysteria2.NewClientAndConn(clientOptions)
 	if err != nil {
 		return err
 	}
