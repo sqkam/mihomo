@@ -41,7 +41,7 @@ type Hysteria2Option struct {
 	BasicOption
 	Name           string   `proxy:"name"`
 	Server         string   `proxy:"server"`
-	Port           int      `proxy:"port"`
+	Port           string   `proxy:"port"`
 	Up             string   `proxy:"up,omitempty"`
 	Down           string   `proxy:"down,omitempty"`
 	Password       string   `proxy:"password,omitempty"`
@@ -55,6 +55,7 @@ type Hysteria2Option struct {
 	CustomCAString string   `proxy:"ca-str,omitempty"`
 	CWND           int      `proxy:"cwnd,omitempty"`
 	UdpMTU         int      `proxy:"udp-mtu,omitempty"`
+	HopInterval    int      `proxy:"hop-interval,omitempty"`
 }
 
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
@@ -87,15 +88,16 @@ func closeHysteria2(h *Hysteria2) {
 }
 
 func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
+
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	//var salamanderPassword string
+	var salamanderPassword string
 	if len(option.Obfs) > 0 {
 		if option.ObfsPassword == "" {
 			return nil, errors.New("missing obfs password")
 		}
 		switch option.Obfs {
 		case hysteria2.ObfsTypeSalamander:
-			//salamanderPassword = option.ObfsPassword
+			salamanderPassword = option.ObfsPassword
 		default:
 			return nil, fmt.Errorf("unknown obfs type: %s", option.Obfs)
 		}
@@ -136,7 +138,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		ServerAddress:      M.ParseSocksaddrHostPort(option.Server, uint16(50005+rand.Int63n(int64(4000)))),
 		SendBPS:            StringToBps(option.Up),
 		ReceiveBPS:         StringToBps(option.Down),
-		SalamanderPassword: "",
+		SalamanderPassword: salamanderPassword,
 		Password:           option.Password,
 		TLSConfig:          tlsConfig,
 		UDPDisabled:        false,

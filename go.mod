@@ -42,7 +42,7 @@ require (
 	github.com/samber/lo v1.39.0
 	github.com/shirou/gopsutil/v3 v3.23.12
 	github.com/sirupsen/logrus v1.9.3
-	github.com/sqkam/sing-quic v0.0.0-20240309183630-07ae64c50ad4
+	github.com/sqkam/sing-quic v0.0.0-20240309185015-9f1af65e1254
 	github.com/stretchr/testify v1.8.4
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/zhangyunhao116/fastrand v0.3.0
