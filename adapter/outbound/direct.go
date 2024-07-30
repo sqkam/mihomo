@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"errors"
+	"github.com/metacubex/mihomo/global"
 	"os"
 	"strconv"
 
@@ -39,7 +40,9 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 		return nil, err
 	}
 	N.TCPKeepAlive(c)
-	return d.loopBack.NewConn(NewConn(c, d)), nil
+	//return d.loopBack.NewConn(NewConn(&DirectX{Conn: c}, d)), nil
+	//re write req
+	return d.loopBack.NewConn(NewConn(&Oconn{Conn: c, Remote: metadata.RemoteAddress(), Rewrite: global.ReWriteReq, Name: "direct", IsOut: true}, d)), nil
 }
 
 // ListenPacketContext implements C.ProxyAdapter

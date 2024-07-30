@@ -1,6 +1,8 @@
 package mixed
 
 import (
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/global"
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -80,7 +82,12 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 func handleConn(conn net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 
-	bufConn := N.NewBufferedConn(conn)
+	//fmt.Printf("LocalAddr: %v\n", conn.LocalAddr().String())
+	//fmt.Printf("RemoteAddr:%v\n", conn.RemoteAddr().String())
+
+	// rewrite resp
+	bufConn := N.NewBufferedConn(&outbound.Oconn{Conn: conn, Rewrite: global.ReWriteResp, Name: "mixed"})
+	//bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
 	if err != nil {
 		return

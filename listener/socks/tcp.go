@@ -113,6 +113,7 @@ func HandleSocks5(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition)
 		authenticator = nil
 	}
 	target, command, user, err := socks5.ServerHandshake(conn, authenticator)
+
 	if err != nil {
 		conn.Close()
 		return

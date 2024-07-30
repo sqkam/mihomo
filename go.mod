@@ -7,6 +7,7 @@ require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/cilium/ebpf v0.12.3
+	github.com/cloudwego/hertz v0.9.1
 	github.com/coreos/go-iptables v0.7.0
 	github.com/dlclark/regexp2 v1.11.0
 	github.com/go-chi/chi/v5 v5.0.14
@@ -14,6 +15,7 @@ require (
 	github.com/go-chi/render v1.0.3
 	github.com/gobwas/ws v1.4.0
 	github.com/gofrs/uuid/v5 v5.2.0
+	github.com/hertz-contrib/obs-opentelemetry/logging/logrus v0.1.1
 	github.com/insomniacslk/dhcp v0.0.0-20240529192340-51bc6136a0a6
 	github.com/klauspost/cpuid/v2 v2.2.8
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
@@ -53,6 +55,7 @@ require (
 	golang.org/x/sync v0.7.0
 	golang.org/x/sys v0.21.0
 	google.golang.org/protobuf v1.34.2
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.3.0
 )
@@ -104,6 +107,8 @@ require (
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
+	go.opentelemetry.io/otel v1.4.1 // indirect
+	go.opentelemetry.io/otel/trace v1.4.1 // indirect
 	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/text v0.16.0 // indirect

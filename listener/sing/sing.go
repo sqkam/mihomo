@@ -3,6 +3,7 @@ package sing
 import (
 	"context"
 	"errors"
+	"github.com/metacubex/mihomo/global"
 	"net"
 	"net/netip"
 	"sync"
@@ -133,7 +134,10 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	inbound.ApplyAdditions(cMetadata, getAdditions(ctx)...)
 	inbound.ApplyAdditions(cMetadata, h.Additions...)
 
-	h.Tunnel.HandleTCPConn(conn, cMetadata) // this goroutine must exit after conn unused
+	//h.Tunnel.HandleTCPConn(&outbound.Stun{Conn: conn}, cMetadata) // this goroutine must exit after conn unused
+	// rewrite resp
+	h.Tunnel.HandleTCPConn(&outbound.Oconn{Conn: conn, Rewrite: global.ReWriteResp, Name: "tunnel"}, cMetadata) // this goroutine must exit after conn unused
+	//h.Tunnel.HandleTCPConn(conn, cMetadata) // this goroutine must exit after conn unused
 	return nil
 }
 
