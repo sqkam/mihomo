@@ -42,7 +42,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 	N.TCPKeepAlive(c)
 	//return d.loopBack.NewConn(NewConn(&DirectX{Conn: c}, d)), nil
 	//re write req
-	return d.loopBack.NewConn(NewConn(&Oconn{Conn: c, Remote: metadata.RemoteAddress(), Rewrite: global.ReWriteReq, Name: "direct", IsOut: true}, d)), nil
+	return d.loopBack.NewConn(NewConn(&Oconn{Conn: c, Remote: metadata.RemoteAddress(), RewriteReq: global.ReWriteReq, RewriteResp: global.ReWriteResp, Name: "direct"}, d)), nil
 }
 
 // ListenPacketContext implements C.ProxyAdapter
