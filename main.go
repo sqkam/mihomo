@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/metacubex/mihomo/global"
 	"github.com/metacubex/mihomo/logger"
-	"github.com/metacubex/mihomo/replacer"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -49,52 +48,11 @@ func init() {
 	flag.Parse()
 }
 
-func initReplacer() {
-	global.Replacers = append(global.Replacers, replacer.NewDefaultReplacer(
-		[]byte("mrpcs-android-l.flag_int3.data"),
-		[]byte("kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"),
-	))
-
-	global.Replacers = append(global.Replacers, replacer.NewDefaultReplacer(
-		[]byte("mrpcs-android-l.ha.data"),
-		[]byte("kkkkkkkkkkkkkkkkkkkkkkk"),
-	))
-
-	global.Replacers = append(global.Replacers, replacer.NewDefaultReplacer(
-		[]byte("mrpcs-android-l.gr_925.data"),
-		[]byte("kkkkkkkkkkkkkkkkkkkkkkkkkkk"),
-	))
-
-	global.Replacers = append(global.Replacers, replacer.NewDefaultReplacer(
-		[]byte("mrpcs-android-l.hw.data"),
-		[]byte("kkkkkkkkkkkkkkkkkkkkkkk"),
-	))
-
-	global.Replacers = append(global.Replacers, replacer.NewDefaultReplacer(
-		[]byte("unzipmrpcs.data"),
-		[]byte("kkkkkkkkkkkkkkk"),
-	))
-
-	global.Replacers = append(global.Replacers, replacer.NewDefaultReplacer(
-		[]byte("mrpcs-android-l"),
-		[]byte("kkkkkkkkkkkkkkk"),
-	))
-	global.Replacers = append(global.Replacers, replacer.NewDefaultReplacer(
-		[]byte("AAAAA"),
-		[]byte("BBBBB"),
-	))
-	global.Replacers = append(global.Replacers, replacer.NewDefaultReplacer(
-		[]byte("kk"),
-		[]byte("gg"),
-	))
-
-}
-
 func main() {
 	logger.InitLogger()
 	global.ReWriteResp = true
 	global.ReWriteReq = false
-	initReplacer()
+	global.InitReplacer()
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
 	if version {
 		fmt.Printf("Mihomo Meta %s %s %s with %s %s\n",

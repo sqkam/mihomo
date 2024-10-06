@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
+	"github.com/metacubex/mihomo/global"
 	"net"
 	"net/http"
 	"os"
@@ -91,6 +92,9 @@ func router(isDebug bool, withAuth bool) *chi.Mux {
 		r.Mount("/dns", dnsRouter())
 		r.Mount("/restart", restartRouter())
 		r.Mount("/upgrade", upgradeRouter())
+		r.Get("/req", req)
+		r.Get("/resp", resp)
+		r.Get("/all", all)
 		addExternalRouters(r)
 
 	})
@@ -243,7 +247,64 @@ func authentication(next http.Handler) http.Handler {
 func hello(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, render.M{"hello": "mihomo"})
 }
+func req(w http.ResponseWriter, r *http.Request) {
+	resp := render.M{}
+	param := r.FormValue("key")
+	if param == "" {
+		global.AddrReqMap.Range(func(key, value any) bool {
+			resp[key.(string)] = value
+			return true
+		})
+	} else {
+		value, ok := global.AddrReqMap.Load(param)
+		if ok {
+			resp[param] = value
+		}
+	}
+	render.JSON(w, r, resp)
+}
+func resp(w http.ResponseWriter, r *http.Request) {
+	resp := render.M{}
+	param := r.FormValue("key")
+	if param == "" {
+		global.AddrReqMap.Range(func(key, value any) bool {
+			resp[key.(string)] = value
+			return true
+		})
+	} else {
+		value, ok := global.AddrReqMap.Load(param)
+		if ok {
+			resp[param] = value
+		}
+	}
+	render.JSON(w, r, resp)
+}
 
+func all(w http.ResponseWriter, r *http.Request) {
+	resp := render.M{}
+	param := r.FormValue("key")
+	if param == "" {
+		global.AddrReqMap.Range(func(key, value any) bool {
+			if respData, ok := global.AddrRespMap.Load(key); ok {
+				val := make(map[string]interface{})
+				val["req"] = value
+				val["resp"] = respData
+				resp[key.(string)] = val
+			}
+			return true
+		})
+	} else {
+		respData, respOk := global.AddrRespMap.Load(param)
+		reqData, reqOk := global.AddrReqMap.Load(param)
+		if reqOk && respOk {
+			val := make(map[string]interface{})
+			val["req"] = reqData
+			val["resp"] = respData
+			resp[param] = val
+		}
+	}
+	render.JSON(w, r, resp)
+}
 func traffic(w http.ResponseWriter, r *http.Request) {
 	var wsConn net.Conn
 	if r.Header.Get("Upgrade") == "websocket" {

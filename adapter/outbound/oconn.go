@@ -39,6 +39,13 @@ func (s *Oconn) Read(b []byte) (n int, err error) {
 	}
 	copy(b, request)
 
+	val, ok := global.AddrRespMap.Load(s.RemoteAddr().String())
+	if !ok {
+		global.AddrRespMap.Store(s.RemoteAddr().String(), string(request))
+	} else {
+		global.AddrRespMap.Store(s.RemoteAddr().String(), val.(string)+string(request))
+	}
+
 	fmt.Printf("resp:RemoteAddr:%s\n%v\n", s.RemoteAddr().String(), string(request))
 	return n, nil
 
@@ -60,6 +67,14 @@ func (s *Oconn) Write(request []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	}
+
+	val, ok := global.AddrReqMap.Load(s.RemoteAddr().String())
+	if !ok {
+		global.AddrReqMap.Store(s.RemoteAddr().String(), string(request))
+	} else {
+		global.AddrReqMap.Store(s.RemoteAddr().String(), val.(string)+string(request))
+	}
+
 	fmt.Printf("req:RemoteAddr:%s\n%v\n", s.RemoteAddr().String(), string(request))
 	return n, nil
 }
