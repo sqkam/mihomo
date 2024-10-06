@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
+	"github.com/metacubex/mihomo/global"
 	"net"
 	"net/http"
 	"os"

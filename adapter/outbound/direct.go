@@ -3,10 +3,10 @@ package outbound
 import (
 	"context"
 	"errors"
+	"github.com/metacubex/mihomo/global"
 	"os"
 	"strconv"
 
-	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/loopback"
 	"github.com/metacubex/mihomo/component/resolver"
