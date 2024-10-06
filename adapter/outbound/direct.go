@@ -3,7 +3,6 @@ package outbound
 import (
 	"context"
 	"errors"
-	"github.com/metacubex/mihomo/global"
 	"os"
 	"strconv"
 
@@ -34,14 +33,11 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 			return nil, err
 		}
 	}
-	opts = append(opts, dialer.WithResolver(resolver.DefaultResolver))
+	opts = append(opts, dialer.WithResolver(resolver.DirectHostResolver))
 	c, err := dialer.DialContext(ctx, "tcp", metadata.RemoteAddress(), d.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, err
 	}
-	N.TCPKeepAlive(c)
-	//return d.loopBack.NewConn(NewConn(&DirectX{Conn: c}, d)), nil
-	//re write req
 	return d.loopBack.NewConn(NewConn(&Oconn{Conn: c, Remote: metadata.RemoteAddress(), RewriteReq: global.ReWriteReq, RewriteResp: global.ReWriteResp, Name: "direct"}, d)), nil
 }
 
@@ -54,7 +50,7 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 	}
 	// net.UDPConn.WriteTo only working with *net.UDPAddr, so we need a net.UDPAddr
 	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, resolver.DefaultResolver)
+		ip, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, resolver.DirectHostResolver)
 		if err != nil {
 			return nil, errors.New("can't resolve ip")
 		}
