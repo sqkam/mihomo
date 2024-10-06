@@ -1,0 +1,12 @@
+services:
+  mihomo:
+    image: sqkam/mihomo
+    container_name: mihomo
+    network_mode: "host"
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - /root/.config/mihomo:/root/.config/mihomo
+      - /dev/net/tun:/dev/net/tun
+

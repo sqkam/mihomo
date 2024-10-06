@@ -163,3 +163,7 @@ clean:
 CLANG ?= clang-14
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
+build:
+	docker rmi sqkma/mihomo:latest || true
+	go build -tags with_gvisor
+	docker build -t sqkam/mihomo:latest .
