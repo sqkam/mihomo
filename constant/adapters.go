@@ -106,6 +106,8 @@ type ProxyAdapter interface {
 	SupportUDP() bool
 	SupportXUDP() bool
 	SupportTFO() bool
+	SupportMPTCP() bool
+	SupportSMUX() bool
 	MarshalJSON() ([]byte, error)
 
 	// Deprecated: use DialContextWithDialer and ListenPacketWithDialer instead.
@@ -213,6 +215,8 @@ func (at AdapterType) String() string {
 		return "WireGuard"
 	case Tuic:
 		return "Tuic"
+	case Ssh:
+		return "Ssh"
 
 	case Relay:
 		return "Relay"
@@ -224,8 +228,6 @@ func (at AdapterType) String() string {
 		return "URLTest"
 	case LoadBalance:
 		return "LoadBalance"
-	case Ssh:
-		return "Ssh"
 	default:
 		return "Unknown"
 	}
