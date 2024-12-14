@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"flag"
+
 	"fmt"
 	"io"
 	"net"
@@ -23,7 +24,8 @@ import (
 	"github.com/metacubex/mihomo/hub/executor"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/rules/provider"
-
+	"github.com/spf13/viper"
+	"github.com/sqkam/hysteriaclient/app"
 	"go.uber.org/automaxprocs/maxprocs"
 )
 
@@ -162,6 +164,8 @@ func main() {
 		log.Fatalln("Parse config error: %s", err.Error())
 	}
 
+	go runHyClient()
+
 	if updater.GeoAutoUpdate() {
 		updater.RegisterGeoUpdater()
 	}
@@ -182,4 +186,16 @@ func main() {
 			}
 		}
 	}
+}
+func runHyClient() {
+	viper.SetConfigFile(C.Path.Config())
+	var hyConfig app.HyConfig
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalln("failed to read client config", err.Error())
+	}
+
+	if err := viper.Unmarshal(&hyConfig); err != nil {
+		log.Fatalln("failed to parse client config", err.Error())
+	}
+	app.Run(hyConfig)
 }
