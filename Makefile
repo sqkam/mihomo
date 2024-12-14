@@ -17,6 +17,7 @@ GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.
 		-w -s -buildid='
 
 PLATFORM_LIST = \
+	darwin-amd64-compatible \
 	darwin-amd64 \
 	darwin-arm64 \
 	linux-amd64-compatible \
@@ -162,7 +163,3 @@ clean:
 CLANG ?= clang-14
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
-ebpf: export BPF_CLANG := $(CLANG)
-ebpf: export BPF_CFLAGS := $(CFLAGS)
-ebpf:
-	cd component/ebpf/ && go generate ./...

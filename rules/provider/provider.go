@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"gopkg.in/yaml.v3"
+	"io"
 	"runtime"
 	"strings"
 	"time"
@@ -13,14 +13,18 @@ import (
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
+
+	"gopkg.in/yaml.v3"
 )
 
-var (
-	ruleProviders = map[string]P.RuleProvider{}
-)
+var tunnel P.Tunnel
+
+func SetTunnel(t P.Tunnel) {
+	tunnel = t
+}
 
 type ruleSetProvider struct {
-	*resource.Fetcher[any]
+	*resource.Fetcher[ruleStrategy]
 	behavior P.RuleBehavior
 	format   P.RuleFormat
 	strategy ruleStrategy
@@ -40,6 +44,7 @@ type RulePayload struct {
 }
 
 type ruleStrategy interface {
+	Behavior() P.RuleBehavior
 	Match(metadata *C.Metadata) bool
 	Count() int
 	ShouldResolveIP() bool
@@ -49,14 +54,11 @@ type ruleStrategy interface {
 	FinishInsert()
 }
 
-func RuleProviders() map[string]P.RuleProvider {
-	return ruleProviders
-}
-
-func SetRuleProvider(ruleProvider P.RuleProvider) {
-	if ruleProvider != nil {
-		ruleProviders[(ruleProvider).Name()] = ruleProvider
-	}
+type mrsRuleStrategy interface {
+	ruleStrategy
+	FromMrs(r io.Reader, count int) error
+	WriteMrs(w io.Writer) error
+	DumpMrs(f func(key string) bool)
 }
 
 func (rp *ruleSetProvider) Type() P.ProviderType {
@@ -64,27 +66,21 @@ func (rp *ruleSetProvider) Type() P.ProviderType {
 }
 
 func (rp *ruleSetProvider) Initial() error {
-	elm, err := rp.Fetcher.Initial()
-	if err != nil {
-		return err
-	}
-
-	rp.OnUpdate(elm)
-	return nil
+	_, err := rp.Fetcher.Initial()
+	return err
 }
 
 func (rp *ruleSetProvider) Update() error {
-	elm, same, err := rp.Fetcher.Update()
-	if err == nil && !same {
-		rp.OnUpdate(elm)
-		return nil
-	}
-
+	_, _, err := rp.Fetcher.Update()
 	return err
 }
 
 func (rp *ruleSetProvider) Behavior() P.RuleBehavior {
 	return rp.behavior
+}
+
+func (rp *ruleSetProvider) Count() int {
+	return rp.strategy.Count()
 }
 
 func (rp *ruleSetProvider) Match(metadata *C.Metadata) bool {
@@ -99,8 +95,8 @@ func (rp *ruleSetProvider) ShouldFindProcess() bool {
 	return rp.strategy.ShouldFindProcess()
 }
 
-func (rp *ruleSetProvider) AsRule(adaptor string) C.Rule {
-	panic("implement me")
+func (rp *ruleSetProvider) Strategy() any {
+	return rp.strategy
 }
 
 func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
@@ -111,9 +107,14 @@ func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
 			"name":        rp.Name(),
 			"ruleCount":   rp.strategy.Count(),
 			"type":        rp.Type().String(),
-			"updatedAt":   rp.UpdatedAt,
+			"updatedAt":   rp.UpdatedAt(),
 			"vehicleType": rp.VehicleType().String(),
 		})
+}
+
+func (rp *RuleSetProvider) Close() error {
+	runtime.SetFinalizer(rp, nil)
+	return rp.ruleSetProvider.Close()
 }
 
 func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleFormat, interval time.Duration, vehicle P.Vehicle,
@@ -123,20 +124,21 @@ func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleForma
 		format:   format,
 	}
 
-	onUpdate := func(elm interface{}) {
-		strategy := elm.(ruleStrategy)
+	onUpdate := func(strategy ruleStrategy) {
 		rp.strategy = strategy
+		tunnel.RuleUpdateCallback().Emit(rp)
 	}
 
 	rp.strategy = newStrategy(behavior, parse)
-	rp.Fetcher = resource.NewFetcher(name, interval, vehicle, func(bytes []byte) (any, error) { return rulesParse(bytes, newStrategy(behavior, parse), format) }, onUpdate)
+	rp.Fetcher = resource.NewFetcher(name, interval, vehicle, func(bytes []byte) (ruleStrategy, error) {
+		return rulesParse(bytes, newStrategy(behavior, parse), format)
+	}, onUpdate)
 
 	wrapper := &RuleSetProvider{
 		rp,
 	}
 
-	final := func(provider *RuleSetProvider) { _ = rp.Fetcher.Destroy() }
-	runtime.SetFinalizer(wrapper, final)
+	runtime.SetFinalizer(wrapper, (*RuleSetProvider).Close)
 	return wrapper
 }
 
@@ -157,9 +159,13 @@ func newStrategy(behavior P.RuleBehavior, parse func(tp, payload, target string,
 }
 
 var ErrNoPayload = errors.New("file must have a `payload` field")
+var ErrInvalidFormat = errors.New("invalid format")
 
-func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (any, error) {
+func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStrategy, error) {
 	strategy.Reset()
+	if format == P.MrsRule {
+		return rulesMrsParse(buf, strategy)
+	}
 
 	schema := &RulePayload{}
 
@@ -176,15 +182,14 @@ func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (any, er
 			line = buf[s : i+1]
 			s = i + 1
 		} else {
-			s = len(buf)              // stop loop in next step
-			if firstLineLength == 0 { // no head or only one line body
+			s = len(buf)                                      // stop loop in next step
+			if firstLineLength == 0 && format == P.YamlRule { // no head or only one line body
 				return nil, ErrNoPayload
 			}
 		}
 		var str string
 		switch format {
 		case P.TextRule:
-			firstLineLength = -1 // don't return ErrNoPayload when read last line
 			str = string(line)
 			str = strings.TrimSpace(str)
 			if len(str) == 0 {
@@ -234,6 +239,8 @@ func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (any, er
 			if len(schema.Payload) > 0 {
 				str = schema.Payload[0]
 			}
+		default:
+			return nil, ErrInvalidFormat
 		}
 
 		if str == "" {

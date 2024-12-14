@@ -1,13 +1,14 @@
 package constant
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"os"
 	P "path"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/constant/features"
 )
 
 const Name = "mihomo"
@@ -15,6 +16,7 @@ const Name = "mihomo"
 var (
 	GeositeName = "GeoSite.dat"
 	GeoipName   = "GeoIP.dat"
+	ASNName     = "ASN.mmdb"
 )
 
 // Path is used to get the configuration path
@@ -72,7 +74,7 @@ func (p *path) Resolve(path string) string {
 
 // IsSafePath return true if path is a subpath of homedir
 func (p *path) IsSafePath(path string) bool {
-	if p.allowUnsafePath {
+	if p.allowUnsafePath || features.CMFA {
 		return true
 	}
 	homedir := p.HomeDir()
@@ -86,8 +88,8 @@ func (p *path) IsSafePath(path string) bool {
 }
 
 func (p *path) GetPathByHash(prefix, name string) string {
-	hash := md5.Sum([]byte(name))
-	filename := hex.EncodeToString(hash[:])
+	hash := utils.MakeHash([]byte(name))
+	filename := hash.String()
 	return filepath.Join(p.HomeDir(), prefix, filename)
 }
 
@@ -110,6 +112,25 @@ func (p *path) MMDB() string {
 		}
 	}
 	return P.Join(p.homeDir, "geoip.metadb")
+}
+
+func (p *path) ASN() string {
+	files, err := os.ReadDir(p.homeDir)
+	if err != nil {
+		return ""
+	}
+	for _, fi := range files {
+		if fi.IsDir() {
+			// 目录则直接跳过
+			continue
+		} else {
+			if strings.EqualFold(fi.Name(), "ASN.mmdb") {
+				ASNName = fi.Name()
+				return P.Join(p.homeDir, fi.Name())
+			}
+		}
+	}
+	return P.Join(p.homeDir, ASNName)
 }
 
 func (p *path) OldCache() string {
