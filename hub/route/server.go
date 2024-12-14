@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"crypto/tls"
+	"embed"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -95,6 +96,9 @@ func SetUIPath(path string) {
 	uiPath = C.Path.Resolve(path)
 }
 
+//go:embed ui
+var uiDir embed.FS
+
 func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 	r := chi.NewRouter()
 	cors.Apply(r)
@@ -135,15 +139,14 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 
 	})
 
-	if uiPath != "" {
-		r.Group(func(r chi.Router) {
-			fs := http.StripPrefix("/ui", http.FileServer(http.Dir(uiPath)))
-			r.Get("/ui", http.RedirectHandler("/ui/", http.StatusTemporaryRedirect).ServeHTTP)
-			r.Get("/ui/*", func(w http.ResponseWriter, r *http.Request) {
-				fs.ServeHTTP(w, r)
-			})
+	r.Group(func(r chi.Router) {
+		fs := http.StripPrefix("", http.FileServer(http.FS(uiDir)))
+		r.Get("/ui", http.RedirectHandler("/ui/", http.StatusTemporaryRedirect).ServeHTTP)
+		r.Get("/ui/*", func(w http.ResponseWriter, r *http.Request) {
+			fs.ServeHTTP(w, r)
 		})
-	}
+	})
+
 	if len(dohServer) > 0 && dohServer[0] == '/' {
 		r.Mount(dohServer, dohRouter())
 	}
