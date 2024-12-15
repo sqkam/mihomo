@@ -53,7 +53,7 @@ require (
 	go.uber.org/automaxprocs v1.6.0
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/crypto v0.31.0
-	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // lastest version compatible with golang1.20
+	golang.org/x/exp v0.0.0-20241215155358-4a5509556b9e // lastest version compatible with golang1.20
 	golang.org/x/net v0.32.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/protobuf v1.35.2 // lastest version compatible with golang1.20
@@ -63,7 +63,7 @@ require (
 
 require (
 	github.com/spf13/viper v1.19.0
-	github.com/sqkam/hysteriaclient v0.0.0-20241215083601-4cc813394043
+	github.com/sqkam/hysteriaclient v0.0.0-20241215232058-f7ef551bc208
 )
 
 require (

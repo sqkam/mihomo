@@ -1,6 +1,8 @@
 package executor
 
 import (
+	"context"
+	_ "embed"
 	"fmt"
 	"github.com/sqkam/hysteriaclient/app"
 	"net"
@@ -82,13 +84,23 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 	return config.Parse(buf)
 }
 
+var hyLastCancel context.CancelFunc
+
 // ApplyConfig dispatch configure to all parts without ExternalController
 func ApplyConfig(cfg *config.Config, force bool) {
+
 	mux.Lock()
 	defer mux.Unlock()
 	log.SetLevel(cfg.General.LogLevel)
 
 	tunnel.OnSuspend()
+
+	if hyLastCancel != nil {
+		hyLastCancel()
+	}
+
+	hyCtx, hyCancel := context.WithCancel(context.Background())
+	hyLastCancel = hyCancel
 
 	ca.ResetCertificate()
 	for _, c := range cfg.TLS.CustomTrustCert {
@@ -113,6 +125,9 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	tunnel.OnInnerLoading()
 
+	go runHyClient(hyCtx, cfg)
+	log.Infoln("runHyClient runHyClient runHyClient runHyClient runHyClient runHyClient runHyClient runHyClient runHyClient")
+
 	initInnerTcp()
 	loadProxyProvider(cfg.Providers)
 	updateProfile(cfg)
@@ -124,18 +139,10 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	resolver.ResetConnection()
 
-	log.Warnln("%s", "runHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.Do")
-	log.Infoln("%s", "runHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.Do")
-	runHyClientOnce.Do(func() {
-		go runHyClient(cfg)
-	})
-
 }
 
-var runHyClientOnce sync.Once
-
-func runHyClient(cfg *config.Config) {
-	app.Run(cfg.Hy, log.SingLogger)
+func runHyClient(ctx context.Context, cfg *config.Config) {
+	app.Run(ctx, cfg.Hy, log.SingLogger)
 }
 
 func initInnerTcp() {

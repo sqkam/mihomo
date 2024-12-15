@@ -1,17 +1,10 @@
 package config
 
 import (
+	"bytes"
 	"container/list"
 	"errors"
 	"fmt"
-	"github.com/sqkam/hysteriaclient/app"
-	"net"
-	"net/netip"
-	"net/url"
-	"strings"
-	"time"
-	_ "unsafe"
-
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
@@ -36,6 +29,14 @@ import (
 	RC "github.com/metacubex/mihomo/rules/common"
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
+	"github.com/spf13/viper"
+	"github.com/sqkam/hysteriaclient/app"
+	"net"
+	"net/netip"
+	"net/url"
+	"strings"
+	"time"
+	_ "unsafe"
 
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"golang.org/x/exp/slices"
@@ -428,7 +429,7 @@ type RawConfig struct {
 	TLS           RawTLS                    `yaml:"tls" json:"tls"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
-	Hy              app.HyConfig       `yaml:"hy"`
+	Hy              app.HyConfig       `yaml:"hy" mapstructure:"hy"`
 }
 
 var (
@@ -574,7 +575,15 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
 		return nil, err
 	}
+	viper.SetConfigType("yaml")
 
+	if err := viper.ReadConfig(bytes.NewBuffer(buf)); err != nil {
+		panic(err)
+	}
+
+	if err := viper.UnmarshalKey("hy", &rawCfg.Hy); err != nil {
+		panic(err)
+	}
 	return rawCfg, nil
 }
 
@@ -705,6 +714,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
+
 	config.Hy = rawCfg.Hy
 	return config, nil
 }
