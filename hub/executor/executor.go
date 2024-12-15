@@ -123,8 +123,13 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateUpdater(cfg)
 
 	resolver.ResetConnection()
-	go runHyClient(cfg)
+	runHyClientOnce.Do(func() {
+		go runHyClient(cfg)
+	})
+
 }
+
+var runHyClientOnce sync.Once
 
 func runHyClient(cfg *config.Config) {
 	app.Run(cfg.Hy, log.SingLogger)
