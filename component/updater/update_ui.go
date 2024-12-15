@@ -29,6 +29,7 @@ func NewUiUpdater(externalUI, externalUIURL, externalUIName string) *UIUpdater {
 	// checkout externalUI exist
 	if externalUI != "" {
 		updater.autoDownloadUI = true
+		updater.autoDownloadUI = false
 		updater.externalUIPath = C.Path.Resolve(externalUI)
 	} else {
 		// default externalUI path
@@ -38,6 +39,7 @@ func NewUiUpdater(externalUI, externalUIURL, externalUIName string) *UIUpdater {
 	// checkout UIpath/name exist
 	if externalUIName != "" {
 		updater.autoDownloadUI = true
+		updater.autoDownloadUI = false
 		updater.externalUIPath = path.Join(updater.externalUIPath, externalUIName)
 	}
 

@@ -123,6 +123,9 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateUpdater(cfg)
 
 	resolver.ResetConnection()
+
+	log.Warnln("%s", "runHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.Do")
+	log.Infoln("%s", "runHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.DorunHyClientOnce.Do")
 	runHyClientOnce.Do(func() {
 		go runHyClient(cfg)
 	})
