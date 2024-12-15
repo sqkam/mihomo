@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"github.com/sqkam/hysteriaclient/app"
 	"net"
 	"net/netip"
 	"net/url"
@@ -197,6 +198,7 @@ type Config struct {
 	Tunnels       []LC.Tunnel
 	Sniffer       *sniffer.Config
 	TLS           *TLS
+	Hy            app.HyConfig
 }
 
 type RawCors struct {
@@ -426,6 +428,7 @@ type RawConfig struct {
 	TLS           RawTLS                    `yaml:"tls" json:"tls"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
+	Hy              app.HyConfig       `yaml:"hy"`
 }
 
 var (
@@ -702,7 +705,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
-
+	config.Hy = rawCfg.Hy
 	return config, nil
 }
 

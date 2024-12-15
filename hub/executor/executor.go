@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+	"github.com/sqkam/hysteriaclient/app"
 	"net"
 	"net/netip"
 	"os"
@@ -122,6 +123,11 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateUpdater(cfg)
 
 	resolver.ResetConnection()
+	go runHyClient(cfg)
+}
+
+func runHyClient(cfg *config.Config) {
+	app.Run(cfg.Hy, log.SingLogger)
 }
 
 func initInnerTcp() {
