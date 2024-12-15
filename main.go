@@ -197,5 +197,5 @@ func runHyClient() {
 	if err := viper.Unmarshal(&hyConfig); err != nil {
 		log.Fatalln("failed to parse client config", err.Error())
 	}
-	app.Run(hyConfig)
+	app.Run(hyConfig, log.SingLogger)
 }

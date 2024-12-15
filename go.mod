@@ -63,7 +63,7 @@ require (
 
 require (
 	github.com/spf13/viper v1.19.0
-	github.com/sqkam/hysteriaclient v0.0.0-20241214151226-87e22d247e83
+	github.com/sqkam/hysteriaclient v0.0.0-20241215083601-4cc813394043
 )
 
 require (
