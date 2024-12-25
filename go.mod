@@ -12,7 +12,7 @@ require (
 	github.com/go-chi/render v1.0.3
 	github.com/gobwas/ws v1.4.0
 	github.com/gofrs/uuid/v5 v5.3.0
-	github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef
+	github.com/insomniacslk/dhcp v0.0.0-20241219180459-a662cc47d412
 	github.com/klauspost/compress v1.17.9 // lastest version compatible with golang1.20
 	github.com/klauspost/cpuid/v2 v2.2.9
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
@@ -54,7 +54,7 @@ require (
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // lastest version compatible with golang1.20
-	golang.org/x/net v0.32.0
+	golang.org/x/net v0.33.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/protobuf v1.36.0 // lastest version compatible with golang1.20
 	gopkg.in/yaml.v3 v3.0.1
@@ -63,7 +63,7 @@ require (
 
 require (
 	github.com/spf13/viper v1.19.0
-	github.com/sqkam/hysteriaclient v0.0.0-20241217115637-7df7eb29a17e
+	github.com/sqkam/hysteriaclient v0.0.0-20241223011804-2c65b575927a
 )
 
 require (
@@ -103,7 +103,7 @@ require (
 	github.com/metacubex/gvisor v0.0.0-20241126021258-5b028898cc5a // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
-	github.com/onsi/ginkgo/v2 v2.22.0 // indirect
+	github.com/onsi/ginkgo/v2 v2.22.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
@@ -120,7 +120,7 @@ require (
 	github.com/sina-ghaderi/rabbitio v0.0.0-20220730151941-9ce26f4f872e // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
-	github.com/spf13/cast v1.7.0 // indirect
+	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
