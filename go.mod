@@ -12,7 +12,7 @@ require (
 	github.com/go-chi/render v1.0.3
 	github.com/gobwas/ws v1.4.0
 	github.com/gofrs/uuid/v5 v5.3.0
-	github.com/insomniacslk/dhcp v0.0.0-20241219180459-a662cc47d412
+	github.com/insomniacslk/dhcp v0.0.0-20241224095048-b56fa0d5f25d
 	github.com/klauspost/compress v1.17.9 // lastest version compatible with golang1.20
 	github.com/klauspost/cpuid/v2 v2.2.9
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
@@ -56,14 +56,14 @@ require (
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // lastest version compatible with golang1.20
 	golang.org/x/net v0.33.0
 	golang.org/x/sys v0.28.0
-	google.golang.org/protobuf v1.36.0 // lastest version compatible with golang1.20
+	google.golang.org/protobuf v1.36.1 // lastest version compatible with golang1.20
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.3.0
 )
 
 require (
 	github.com/spf13/viper v1.19.0
-	github.com/sqkam/hysteriaclient v0.0.0-20241223011804-2c65b575927a
+	github.com/sqkam/hysteriaclient v0.0.0-20241225195054-9315af9f412b
 )
 
 require (
