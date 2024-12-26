@@ -234,6 +234,8 @@ github.com/sqkam/hysteriaclient v0.0.0-20241223011804-2c65b575927a h1:wifIYebxjZ
 github.com/sqkam/hysteriaclient v0.0.0-20241223011804-2c65b575927a/go.mod h1:M77lcq21EbFs7+xKrKOy5QPTtL+q59RCwZkCSVhy20o=
 github.com/sqkam/hysteriaclient v0.0.0-20241225195054-9315af9f412b h1:unUR82PS4Dh3kIG3LopwU0719ejiRd3lYub/di7AsMQ=
 github.com/sqkam/hysteriaclient v0.0.0-20241225195054-9315af9f412b/go.mod h1:M77lcq21EbFs7+xKrKOy5QPTtL+q59RCwZkCSVhy20o=
+github.com/sqkam/hysteriaclient v0.0.0-20241226133415-99283c02272b h1:DGHlRxyEZftJN9A+c/JaBs62mvpeE/l6ZhsDSc1Z2f8=
+github.com/sqkam/hysteriaclient v0.0.0-20241226133415-99283c02272b/go.mod h1:M77lcq21EbFs7+xKrKOy5QPTtL+q59RCwZkCSVhy20o=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
 github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
