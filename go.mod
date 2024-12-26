@@ -62,8 +62,9 @@ require (
 )
 
 require (
+	github.com/google/uuid v1.4.0
 	github.com/spf13/viper v1.19.0
-	github.com/sqkam/hysteriaclient v0.0.0-20241226133415-99283c02272b
+	github.com/sqkam/hysteriaclient v0.0.0-20241226151332-15b099afe0da
 )
 
 require (

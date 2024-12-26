@@ -5,10 +5,12 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/sqkam/hysteriaclient/app"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -289,6 +291,15 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	satisfied = resp != nil && (expectedStatus == nil || expectedStatus.Check(uint16(resp.StatusCode)))
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
+}
+
+var HyParamConfig *app.HyConfig
+
+func NewAppHyConfig() *app.HyConfig {
+	return &app.HyConfig{
+		Hys:    make([]app.ClientConfig, 0),
+		OnlyV6: runtime.GOOS == "android",
+	}
 }
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
 	return &Proxy{

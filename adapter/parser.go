@@ -1,9 +1,16 @@
 package adapter
 
 import (
+	"bytes"
 	"fmt"
-
+	"github.com/google/uuid"
 	tlsC "github.com/metacubex/mihomo/component/tls"
+	"github.com/spf13/viper"
+	"github.com/sqkam/hysteriaclient/app"
+	"gopkg.in/yaml.v3"
+	"math/rand"
+	"net"
+	"strconv"
 
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/structure"
@@ -99,6 +106,49 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy, err = outbound.NewHysteria2(*hyOption)
+	case "hysteriaclient":
+		v := viper.New()
+		v.SetConfigType("yaml")
+		hyClientOption := app.ClientConfig{}
+		var buf []byte
+		buf, err = yaml.Marshal(mapping)
+		if err != nil {
+			break
+		}
+		if err = v.ReadConfig(bytes.NewBuffer(buf)); err != nil {
+			break
+		}
+
+		if err = v.Unmarshal(&hyClientOption); err != nil {
+			break
+		}
+
+		HyParamConfig.Hys = append(HyParamConfig.Hys, hyClientOption)
+
+		socksOption := &outbound.Socks5Option{
+			Name:           uuid.New().String()[:4],
+			Port:           30000 + rand.Intn(30000),
+			Server:         "127.0.0.1",
+			SkipCertVerify: true,
+			UDP:            true,
+		}
+
+		var portString string
+		if hyClientOption.SOCKS5 != nil {
+			_, portString, err = net.SplitHostPort(hyClientOption.SOCKS5.Listen)
+			if err != nil {
+				break
+			}
+			_ = portString
+			socksOption.Port, err = strconv.Atoi(portString)
+			if err != nil {
+				break
+			}
+		}
+
+		socksOption.Name = fmt.Sprintf("%s-%s%d", "hysteriaclient", hyClientOption.Bandwidth.Down, socksOption.Port)
+
+		proxy, err = outbound.NewSocks5(*socksOption)
 	case "wireguard":
 		wgOption := &outbound.WireGuardOption{}
 		err = decoder.Decode(mapping, wgOption)

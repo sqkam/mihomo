@@ -1,9 +1,12 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/metacubex/mihomo/log"
+	"github.com/sqkam/hysteriaclient/app"
 	"reflect"
 	"runtime"
 	"strings"
@@ -307,6 +310,9 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	}
 }
 
+var hyLastCancel context.CancelFunc
+var hyConfig *app.HyConfig
+
 func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray []string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp, dialerProxy string, override OverrideSchema) resource.Parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
@@ -409,7 +415,10 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 					return nil, fmt.Errorf("proxy %d error: %w", idx, err)
 				}
 
-				proxiesSet[name] = struct{}{}
+				if mapping["type"].(string) != "hysteriaclient" {
+					proxiesSet[name] = struct{}{}
+				}
+
 				proxies = append(proxies, proxy)
 			}
 		}
@@ -421,6 +430,18 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 			return nil, errors.New("file doesn't have any proxy")
 		}
 
+		if hyLastCancel != nil {
+			hyLastCancel()
+		}
+		hyCtx, hyCancel := context.WithCancel(context.Background())
+		hyLastCancel = hyCancel
+		hyConfig = adapter.HyParamConfig
+
+		go runHyClient(hyCtx, *hyConfig)
+
 		return proxies, nil
 	}
+}
+func runHyClient(ctx context.Context, hyCfg app.HyConfig) {
+	app.Run(ctx, hyCfg, log.SingLogger)
 }

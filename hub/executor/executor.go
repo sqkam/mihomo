@@ -1,10 +1,8 @@
 package executor
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
-	"github.com/sqkam/hysteriaclient/app"
 	"net"
 	"net/netip"
 	"os"
@@ -84,8 +82,6 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 	return config.Parse(buf)
 }
 
-var hyLastCancel context.CancelFunc
-
 // ApplyConfig dispatch configure to all parts without ExternalController
 func ApplyConfig(cfg *config.Config, force bool) {
 
@@ -94,13 +90,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	log.SetLevel(cfg.General.LogLevel)
 
 	tunnel.OnSuspend()
-
-	if hyLastCancel != nil {
-		hyLastCancel()
-	}
-
-	hyCtx, hyCancel := context.WithCancel(context.Background())
-	hyLastCancel = hyCancel
 
 	ca.ResetCertificate()
 	for _, c := range cfg.TLS.CustomTrustCert {
@@ -125,7 +114,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	tunnel.OnInnerLoading()
 
-	go runHyClient(hyCtx, cfg)
 	log.Infoln("runHyClient runHyClient runHyClient runHyClient runHyClient runHyClient runHyClient runHyClient runHyClient")
 
 	initInnerTcp()
@@ -139,10 +127,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	resolver.ResetConnection()
 
-}
-
-func runHyClient(ctx context.Context, cfg *config.Config) {
-	app.Run(ctx, cfg.Hy, log.SingLogger)
 }
 
 func initInnerTcp() {

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"container/list"
 	"errors"
 	"fmt"
@@ -29,7 +28,6 @@ import (
 	RC "github.com/metacubex/mihomo/rules/common"
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
-	"github.com/spf13/viper"
 	"github.com/sqkam/hysteriaclient/app"
 	"net"
 	"net/netip"
@@ -429,7 +427,6 @@ type RawConfig struct {
 	TLS           RawTLS                    `yaml:"tls" json:"tls"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
-	Hy              app.HyConfig       `yaml:"hy" mapstructure:"hy"`
 }
 
 var (
@@ -575,15 +572,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
 		return nil, err
 	}
-	viper.SetConfigType("yaml")
 
-	if err := viper.ReadConfig(bytes.NewBuffer(buf)); err != nil {
-		panic(err)
-	}
-
-	if err := viper.UnmarshalKey("hy", &rawCfg.Hy); err != nil {
-		panic(err)
-	}
 	return rawCfg, nil
 }
 
@@ -715,7 +704,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
 
-	config.Hy = rawCfg.Hy
 	return config, nil
 }
 
@@ -836,7 +824,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	proxiesConfig := cfg.Proxy
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
-
+	adapter.HyParamConfig = adapter.NewAppHyConfig()
 	var (
 		proxyList  []string
 		AllProxies []string
@@ -946,6 +934,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		// refresh tray menu
 		go ParsingProxiesCallback(GroupsList, ProxiesList)
 	}
+
 	return proxies, providersMap, nil
 }
 
