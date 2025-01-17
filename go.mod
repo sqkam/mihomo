@@ -62,6 +62,7 @@ require (
 
 require (
 	github.com/cloudwego/hertz v0.9.3
+	github.com/fatih/color v1.18.0
 	github.com/hertz-contrib/obs-opentelemetry/logging/logrus v0.1.1
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -92,6 +93,8 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
 	github.com/metacubex/gvisor v0.0.0-20240320004321-933faba989ec // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
