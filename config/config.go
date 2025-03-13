@@ -922,13 +922,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		)
 		proxies["GLOBAL"] = adapter.NewProxy(global)
 	}
-	ProxiesList = proxiesList
-	GroupsList = groupsList
-	if ParsingProxiesCallback != nil {
-		// refresh tray menu
-		go ParsingProxiesCallback(GroupsList, ProxiesList)
-	}
-
 	return proxies, providersMap, nil
 }
 

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"github.com/metacubex/mihomo/log"
 	"github.com/sqkam/hysteriaclient/app"
+	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
@@ -329,6 +329,9 @@ func (cp *CompatibleProvider) Close() error {
 	return cp.compatibleProvider.Close()
 }
 
+var hyLastCancel context.CancelFunc
+var hyConfig *app.HyConfig
+
 func NewProxiesParser(filter string, excludeFilter string, excludeType string, dialerProxy string, override OverrideSchema) (resource.Parser[[]C.Proxy], error) {
 	excludeFilterReg, err := regexp2.Compile(excludeFilter, regexp2.None)
 	if err != nil {
@@ -339,10 +342,6 @@ func NewProxiesParser(filter string, excludeFilter string, excludeType string, d
 		excludeTypeArray = strings.Split(excludeType, "|")
 	}
 
-var hyLastCancel context.CancelFunc
-var hyConfig *app.HyConfig
-
-func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray []string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp, dialerProxy string, override OverrideSchema) resource.Parser[[]C.Proxy] {
 	var filterRegs []*regexp2.Regexp
 	for _, filter := range strings.Split(filter, "`") {
 		filterReg, err := regexp2.Compile(filter, regexp2.None)
