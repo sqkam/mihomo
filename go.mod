@@ -45,7 +45,6 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.etcd.io/bbolt v1.3.7
-	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.5.3
 	golang.org/x/crypto v0.12.0
 	golang.org/x/exp v0.0.0-20230811145659-89c5cff77bcb

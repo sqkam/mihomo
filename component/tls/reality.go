@@ -39,9 +39,6 @@ type RealityConfig struct {
 	ShortID   [RealityMaxShortIDLen]byte
 }
 
-//go:linkname aesgcmPreferred crypto/tls.aesgcmPreferred
-func aesgcmPreferred(ciphers []uint16) bool
-
 func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config, realityConfig *RealityConfig) (net.Conn, error) {
 	if fingerprint, exists := GetFingerprint(ClientFingerprint); exists {
 		verifier := &realityVerifier{
@@ -90,7 +87,12 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 			return nil, err
 		}
 		var aeadCipher cipher.AEAD
-		if aesgcmPreferred(hello.CipherSuites) {
+		// Reimplement aesgcmPreferred logic: if hardware AES is available, AES-GCM is preferred.
+		var preferAESGCM bool
+		if _, err := aes.NewCipher(authKey); err == nil {
+			preferAESGCM = true
+		}
+		if preferAESGCM {
 			aesBlock, _ := aes.NewCipher(authKey)
 			aeadCipher, _ = cipher.NewGCM(aesBlock)
 		} else {

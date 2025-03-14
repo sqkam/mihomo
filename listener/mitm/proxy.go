@@ -343,7 +343,17 @@ func isWebsocketRequest(req *http.Request) bool {
 	return strings.EqualFold(req.Header.Get("Connection"), "Upgrade") && strings.EqualFold(req.Header.Get("Upgrade"), "websocket")
 }
 
+func isValidMethod(method string) bool {
+	validMethods := []string{"GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE"}
+	for _, m := range validMethods {
+		if method == m {
+			return true
+		}
+	}
+	return false
+}
+
 func isHTTPTraffic(buf []byte) bool {
 	method, _, _ := strings.Cut(string(buf), " ")
-	return validMethod(method)
+	return isValidMethod(method)
 }
