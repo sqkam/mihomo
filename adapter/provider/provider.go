@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/metacubex/mihomo/log"
 	"github.com/sqkam/hysteriaclient/app"
 	"net/http"
 	"reflect"
@@ -480,5 +479,5 @@ func NewProxiesParser(filter string, excludeFilter string, excludeType string, d
 	}, nil
 }
 func runHyClient(ctx context.Context, hyCfg app.HyConfig) {
-	app.Run(ctx, hyCfg, log.SingLogger)
+	//app.Run(ctx, hyCfg, log.SingLogger)
 }

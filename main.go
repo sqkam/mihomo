@@ -6,15 +6,6 @@ import (
 	"flag"
 
 	"fmt"
-	"io"
-	"net"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"syscall"
-
 	"github.com/metacubex/mihomo/component/generater"
 	"github.com/metacubex/mihomo/component/geodata"
 	"github.com/metacubex/mihomo/component/updater"
@@ -26,6 +17,16 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/rules/provider"
 	"go.uber.org/automaxprocs/maxprocs"
+	"io"
+	"net"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
 )
 
 var (
@@ -64,7 +65,9 @@ func main() {
 	net.DefaultResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
 		panic("should never be called")
 	}
-
+	go func() {
+		_ = http.ListenAndServe("0.0.0.0:10000", nil)
+	}()
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
 
 	if len(os.Args) > 1 && os.Args[1] == "convert-ruleset" {
