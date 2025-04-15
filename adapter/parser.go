@@ -14,6 +14,7 @@ import (
 
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/structure"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -25,7 +26,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 	}
 
 	var (
-		proxy C.ProxyAdapter
+		proxy outbound.ProxyAdapter
 		err   error
 	)
 	switch proxyType {
@@ -220,12 +221,13 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			return nil, err
 		}
 		if muxOption.Enabled {
-			proxy, err = outbound.NewSingMux(*muxOption, proxy, proxy.(outbound.ProxyBase))
+			proxy, err = outbound.NewSingMux(*muxOption, proxy)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
+	proxy = outbound.NewAutoCloseProxyAdapter(proxy)
 	return NewProxy(proxy), nil
 }

@@ -199,7 +199,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			Path:  v.option.HTTP2Opts.Path,
 		}
 
-		c, err = mihomoVMess.StreamH2Conn(c, h2Opts)
+		c, err = mihomoVMess.StreamH2Conn(ctx, c, h2Opts)
 	case "grpc":
 		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.realityConfig)
 	default:
@@ -226,17 +226,24 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	if err != nil {
 		return nil, err
 	}
-	return v.streamConn(c, metadata)
+	return v.streamConnConntext(ctx, c, metadata)
 }
 
-func (v *Vmess) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
+func (v *Vmess) streamConnConntext(ctx context.Context, c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
+	useEarly := N.NeedHandshake(c)
+	if !useEarly {
+		if ctx.Done() != nil {
+			done := N.SetupContextForConn(ctx, c)
+			defer done(&err)
+		}
+	}
 	if metadata.NetWork == C.UDP {
 		if v.option.XUDP {
 			var globalID [8]byte
 			if metadata.SourceValid() {
 				globalID = utils.GlobalID(metadata.SourceAddress())
 			}
-			if N.NeedHandshake(c) {
+			if useEarly {
 				conn = v.client.DialEarlyXUDPPacketConn(c,
 					globalID,
 					M.SocksaddrFromNet(metadata.UDPAddr()))
@@ -246,7 +253,7 @@ func (v *Vmess) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err
 					M.SocksaddrFromNet(metadata.UDPAddr()))
 			}
 		} else if v.option.PacketAddr {
-			if N.NeedHandshake(c) {
+			if useEarly {
 				conn = v.client.DialEarlyPacketConn(c,
 					M.ParseSocksaddrHostPort(packetaddr.SeqPacketMagicAddress, 443))
 			} else {
@@ -255,7 +262,7 @@ func (v *Vmess) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err
 			}
 			conn = packetaddr.NewBindConn(conn)
 		} else {
-			if N.NeedHandshake(c) {
+			if useEarly {
 				conn = v.client.DialEarlyPacketConn(c,
 					M.SocksaddrFromNet(metadata.UDPAddr()))
 			} else {
@@ -264,7 +271,7 @@ func (v *Vmess) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err
 			}
 		}
 	} else {
-		if N.NeedHandshake(c) {
+		if useEarly {
 			conn = v.client.DialEarlyConn(c,
 				M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 		} else {
@@ -290,7 +297,7 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 			safeConnClose(c, err)
 		}(c)
 
-		c, err = v.client.DialConn(c, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
+		c, err = v.streamConnConntext(ctx, c, metadata)
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +348,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			safeConnClose(c, err)
 		}(c)
 
-		c, err = v.streamConn(c, metadata)
+		c, err = v.streamConnConntext(ctx, c, metadata)
 		if err != nil {
 			return nil, fmt.Errorf("new vmess client error: %v", err)
 		}
@@ -393,6 +400,14 @@ func (v *Vmess) ProxyInfo() C.ProxyInfo {
 	info := v.Base.ProxyInfo()
 	info.DialerProxy = v.option.DialerProxy
 	return info
+}
+
+// Close implements C.ProxyAdapter
+func (v *Vmess) Close() error {
+	if v.transport != nil {
+		return v.transport.Close()
+	}
+	return nil
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
@@ -470,7 +485,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			option.HTTP2Opts.Host = append(option.HTTP2Opts.Host, "www.example.com")
 		}
 	case "grpc":
-		dialFn := func(network, addr string) (net.Conn, error) {
+		dialFn := func(ctx context.Context, network, addr string) (net.Conn, error) {
 			var err error
 			var cDialer C.Dialer = dialer.NewDialer(v.Base.DialOptions()...)
 			if len(v.option.DialerProxy) > 0 {
@@ -479,7 +494,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 					return nil, err
 				}
 			}
-			c, err := cDialer.DialContext(context.Background(), "tcp", v.addr)
+			c, err := cDialer.DialContext(ctx, "tcp", v.addr)
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}

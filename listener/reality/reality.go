@@ -10,12 +10,13 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/listener/inner"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp"
 
-	"github.com/metacubex/reality"
+	utls "github.com/metacubex/utls"
 )
 
-type Conn = reality.Conn
+type Conn = utls.Conn
 
 type Config struct {
 	Dest              string
@@ -27,12 +28,13 @@ type Config struct {
 }
 
 func (c Config) Build() (*Builder, error) {
-	realityConfig := &reality.Config{}
+	realityConfig := &utls.RealityConfig{}
 	realityConfig.SessionTicketsDisabled = true
 	realityConfig.Type = "tcp"
 	realityConfig.Dest = c.Dest
 	realityConfig.Time = ntp.Now
 	realityConfig.ServerNames = make(map[string]bool)
+	realityConfig.Log = log.Debugln
 	for _, it := range c.ServerNames {
 		realityConfig.ServerNames[it] = true
 	}
@@ -50,7 +52,11 @@ func (c Config) Build() (*Builder, error) {
 	realityConfig.ShortIds = make(map[[8]byte]bool)
 	for i, shortIDString := range c.ShortID {
 		var shortID [8]byte
-		decodedLen, err := hex.Decode(shortID[:], []byte(shortIDString))
+		decodedLen := hex.DecodedLen(len(shortIDString))
+		if decodedLen > 8 {
+			return nil, fmt.Errorf("invalid short_id[%d]: %s", i, shortIDString)
+		}
+		decodedLen, err = hex.Decode(shortID[:], []byte(shortIDString))
 		if err != nil {
 			return nil, fmt.Errorf("decode short_id[%d] '%s': %w", i, shortIDString, err)
 		}
@@ -68,11 +74,11 @@ func (c Config) Build() (*Builder, error) {
 }
 
 type Builder struct {
-	realityConfig *reality.Config
+	realityConfig *utls.RealityConfig
 }
 
 func (b Builder) NewListener(l net.Listener) net.Listener {
-	l = reality.NewListener(l, b.realityConfig)
+	l = utls.NewRealityListener(l, b.realityConfig)
 	// Due to low implementation quality, the reality server intercepted half close and caused memory leaks.
 	// We fixed it by calling Close() directly.
 	l = realityListenerWrapper{l}
@@ -80,7 +86,7 @@ func (b Builder) NewListener(l net.Listener) net.Listener {
 }
 
 type realityConnWrapper struct {
-	*reality.Conn
+	*utls.Conn
 }
 
 func (c realityConnWrapper) Upstream() any {
@@ -100,5 +106,5 @@ func (l realityListenerWrapper) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return realityConnWrapper{c.(*reality.Conn)}, nil
+	return realityConnWrapper{c.(*utls.Conn)}, nil
 }
