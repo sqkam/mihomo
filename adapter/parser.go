@@ -14,7 +14,7 @@ import (
 
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/structure"
-	tlsC "github.com/metacubex/mihomo/component/tls"
+
 	C "github.com/metacubex/mihomo/constant"
 )
 
