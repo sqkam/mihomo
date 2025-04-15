@@ -19,8 +19,8 @@ import (
 	"go.uber.org/automaxprocs/maxprocs"
 	"io"
 	"net"
-	"net/http"
-	_ "net/http/pprof"
+	// "net/http"
+	// _ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -66,7 +66,7 @@ func main() {
 		panic("should never be called")
 	}
 	go func() {
-		_ = http.ListenAndServe("0.0.0.0:10000", nil)
+		//	_ = http.ListenAndServe("0.0.0.0:10000", nil)
 	}()
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
 
