@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/google/uuid"
-	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/spf13/viper"
 	"github.com/sqkam/hysteriaclient/app"
 	"gopkg.in/yaml.v3"
