@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/ca"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/reality"
@@ -74,7 +74,7 @@ func New(config LC.TrojanServer, tunnel C.Tunnel, additions ...inbound.Addition)
 	var httpHandler http.Handler
 
 	if config.Certificate != "" && config.PrivateKey != "" {
-		cert, err := N.ParseCert(config.Certificate, config.PrivateKey, C.Path)
+		cert, err := ca.LoadTLSKeyPair(config.Certificate, config.PrivateKey, C.Path)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +84,7 @@ func New(config LC.TrojanServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		if tlsConfig.Certificates != nil {
 			return nil, errors.New("certificate is unavailable in reality")
 		}
-		realityBuilder, err = config.RealityConfig.Build()
+		realityBuilder, err = config.RealityConfig.Build(tunnel)
 		if err != nil {
 			return nil, err
 		}

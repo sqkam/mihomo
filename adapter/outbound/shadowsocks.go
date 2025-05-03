@@ -19,7 +19,6 @@ import (
 	shadowtls "github.com/metacubex/mihomo/transport/sing-shadowtls"
 	v2rayObfs "github.com/metacubex/mihomo/transport/v2ray-plugin"
 
-	restlsC "github.com/3andne/restls-client-go"
 	shadowsocks "github.com/metacubex/sing-shadowsocks2"
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
@@ -37,7 +36,7 @@ type ShadowSocks struct {
 	v2rayOption     *v2rayObfs.Option
 	gostOption      *gost.Option
 	shadowTLSOption *shadowtls.ShadowTLSOption
-	restlsConfig    *restlsC.Config
+	restlsConfig    *restls.Config
 }
 
 type ShadowSocksOption struct {
@@ -85,11 +84,12 @@ type gostObfsOption struct {
 }
 
 type shadowTLSOption struct {
-	Password       string `obfs:"password"`
-	Host           string `obfs:"host"`
-	Fingerprint    string `obfs:"fingerprint,omitempty"`
-	SkipCertVerify bool   `obfs:"skip-cert-verify,omitempty"`
-	Version        int    `obfs:"version,omitempty"`
+	Password       string   `obfs:"password,omitempty"`
+	Host           string   `obfs:"host"`
+	Fingerprint    string   `obfs:"fingerprint,omitempty"`
+	SkipCertVerify bool     `obfs:"skip-cert-verify,omitempty"`
+	Version        int      `obfs:"version,omitempty"`
+	ALPN           []string `obfs:"alpn,omitempty"`
 }
 
 type restlsOption struct {
@@ -155,8 +155,8 @@ func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metada
 }
 
 // DialContext implements C.ProxyAdapter
-func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	return ss.DialContextWithDialer(ctx, dialer.NewDialer(ss.Base.DialOptions(opts...)...), metadata)
+func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	return ss.DialContextWithDialer(ctx, dialer.NewDialer(ss.DialOptions()...), metadata)
 }
 
 // DialContextWithDialer implements C.ProxyAdapter
@@ -181,8 +181,8 @@ func (ss *ShadowSocks) DialContextWithDialer(ctx context.Context, dialer C.Diale
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	return ss.ListenPacketWithDialer(ctx, dialer.NewDialer(ss.Base.DialOptions(opts...)...), metadata)
+func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	return ss.ListenPacketWithDialer(ctx, dialer.NewDialer(ss.DialOptions()...), metadata)
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter
@@ -265,7 +265,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	var gostOption *gost.Option
 	var obfsOption *simpleObfsOption
 	var shadowTLSOpt *shadowtls.ShadowTLSOption
-	var restlsConfig *restlsC.Config
+	var restlsConfig *restls.Config
 	obfsMode := ""
 
 	decoder := structure.NewDecoder(structure.Option{TagName: "obfs", WeaklyTypedInput: true})
@@ -343,6 +343,12 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			SkipCertVerify:    opt.SkipCertVerify,
 			Version:           opt.Version,
 		}
+
+		if opt.ALPN != nil { // structure's Decode will ensure value not nil when input has value even it was set an empty array
+			shadowTLSOpt.ALPN = opt.ALPN
+		} else {
+			shadowTLSOpt.ALPN = shadowtls.DefaultALPN
+		}
 	} else if option.Plugin == restls.Mode {
 		obfsMode = restls.Mode
 		restlsOpt := &restlsOption{}
@@ -350,7 +356,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
 		}
 
-		restlsConfig, err = restlsC.NewRestlsConfig(restlsOpt.Host, restlsOpt.Password, restlsOpt.VersionHint, restlsOpt.RestlsScript, option.ClientFingerprint)
+		restlsConfig, err = restls.NewRestlsConfig(restlsOpt.Host, restlsOpt.Password, restlsOpt.VersionHint, restlsOpt.RestlsScript, option.ClientFingerprint)
 		if err != nil {
 			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
 		}

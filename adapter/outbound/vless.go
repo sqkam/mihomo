@@ -75,13 +75,7 @@ type VlessOption struct {
 	ClientFingerprint string            `proxy:"client-fingerprint,omitempty"`
 }
 
-func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
-	var err error
-
-	if tlsC.HaveGlobalFingerprint() && len(v.option.ClientFingerprint) == 0 {
-		v.option.ClientFingerprint = tlsC.GetGlobalFingerprint()
-	}
-
+func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch v.option.Network {
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
@@ -231,10 +225,11 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 }
 
 // DialContext implements C.ProxyAdapter
-func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
+func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	var c net.Conn
 	// gun transport
-	if v.transport != nil && len(opts) == 0 {
-		c, err := gun.StreamGunWithTransport(v.transport, v.gunConfig)
+	if v.transport != nil {
+		c, err = gun.StreamGunWithTransport(v.transport, v.gunConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -249,7 +244,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 		return NewConn(c, v), nil
 	}
-	return v.DialContextWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
+	return v.DialContextWithDialer(ctx, dialer.NewDialer(v.DialOptions()...), metadata)
 }
 
 // DialContextWithDialer implements C.ProxyAdapter
@@ -276,7 +271,7 @@ func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
+func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
@@ -287,7 +282,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 	}
 	var c net.Conn
 	// gun transport
-	if v.transport != nil && len(opts) == 0 {
+	if v.transport != nil {
 		c, err = gun.StreamGunWithTransport(v.transport, v.gunConfig)
 		if err != nil {
 			return nil, err
@@ -303,7 +298,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 		return v.ListenPacketOnStreamConn(ctx, c, metadata)
 	}
-	return v.ListenPacketWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
+	return v.ListenPacketWithDialer(ctx, dialer.NewDialer(v.DialOptions()...), metadata)
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter
@@ -576,7 +571,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 	case "grpc":
 		dialFn := func(ctx context.Context, network, addr string) (net.Conn, error) {
 			var err error
-			var cDialer C.Dialer = dialer.NewDialer(v.Base.DialOptions()...)
+			var cDialer C.Dialer = dialer.NewDialer(v.DialOptions()...)
 			if len(v.option.DialerProxy) > 0 {
 				cDialer, err = proxydialer.NewByName(v.option.DialerProxy, cDialer)
 				if err != nil {
@@ -600,10 +595,13 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 		var tlsConfig *tls.Config
 		if option.TLS {
-			tlsConfig = ca.GetGlobalTLSConfig(&tls.Config{
+			tlsConfig, err = ca.GetSpecifiedFingerprintTLSConfig(&tls.Config{
 				InsecureSkipVerify: v.option.SkipCertVerify,
 				ServerName:         v.option.ServerName,
-			})
+			}, v.option.Fingerprint)
+			if err != nil {
+				return nil, err
+			}
 			if option.ServerName == "" {
 				host, _, _ := net.SplitHostPort(v.addr)
 				tlsConfig.ServerName = host

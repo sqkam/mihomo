@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	CN "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/sockopt"
+	"github.com/metacubex/mihomo/component/ca"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing"
@@ -47,7 +48,7 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 		return nil, err
 	}
 
-	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey, C.Path)
+	cert, err := ca.LoadTLSKeyPair(config.Certificate, config.PrivateKey, C.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +61,14 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 	} else {
 		tlsConfig.NextProtos = []string{"h3"}
 	}
+
+	if config.MaxIdleTime == 0 {
+		config.MaxIdleTime = 15000
+	}
+	if config.AuthenticationTimeout == 0 {
+		config.AuthenticationTimeout = 1000
+	}
+
 	quicConfig := &quic.Config{
 		MaxIdleTimeout:        time.Duration(config.MaxIdleTime) * time.Millisecond,
 		MaxIncomingStreams:    ServerMaxIncomingStreams,
@@ -115,7 +124,7 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 	option := &tuic.ServerOption{
 		HandleTcpFn:           handleTcpFn,
 		HandleUdpFn:           handleUdpFn,
-		TlsConfig:             tlsConfig,
+		TlsConfig:             tlsC.UConfig(tlsConfig),
 		QuicConfig:            quicConfig,
 		CongestionController:  config.CongestionController,
 		AuthenticationTimeout: time.Duration(config.AuthenticationTimeout) * time.Millisecond,

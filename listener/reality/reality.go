@@ -9,6 +9,8 @@ import (
 	"net"
 	"time"
 
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/listener/inner"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp"
@@ -27,7 +29,7 @@ type Config struct {
 	Proxy             string
 }
 
-func (c Config) Build() (*Builder, error) {
+func (c Config) Build(tunnel C.Tunnel) (*Builder, error) {
 	realityConfig := &utls.RealityConfig{}
 	realityConfig.SessionTicketsDisabled = true
 	realityConfig.Type = "tcp"
@@ -67,7 +69,7 @@ func (c Config) Build() (*Builder, error) {
 	}
 
 	realityConfig.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		return inner.HandleTcp(address, c.Proxy)
+		return inner.HandleTcp(tunnel, address, c.Proxy)
 	}
 
 	return &Builder{realityConfig}, nil
@@ -78,11 +80,17 @@ type Builder struct {
 }
 
 func (b Builder) NewListener(l net.Listener) net.Listener {
-	l = utls.NewRealityListener(l, b.realityConfig)
-	// Due to low implementation quality, the reality server intercepted half close and caused memory leaks.
-	// We fixed it by calling Close() directly.
-	l = realityListenerWrapper{l}
-	return l
+	return N.NewHandleContextListener(context.Background(), l, func(ctx context.Context, conn net.Conn) (net.Conn, error) {
+		c, err := utls.RealityServer(ctx, conn, b.realityConfig)
+		if err != nil {
+			return nil, err
+		}
+		// Due to low implementation quality, the reality server intercepted half-close and caused memory leaks.
+		// We fixed it by calling Close() directly.
+		return realityConnWrapper{c}, nil
+	}, func(a any) {
+		log.Errorln("reality server panic: %s", a)
+	})
 }
 
 type realityConnWrapper struct {
@@ -95,16 +103,4 @@ func (c realityConnWrapper) Upstream() any {
 
 func (c realityConnWrapper) CloseWrite() error {
 	return c.Close()
-}
-
-type realityListenerWrapper struct {
-	net.Listener
-}
-
-func (l realityListenerWrapper) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	return realityConnWrapper{c.(*utls.Conn)}, nil
 }

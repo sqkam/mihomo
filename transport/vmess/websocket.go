@@ -351,27 +351,26 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 		}
 		if config.ServerName == "" && !config.InsecureSkipVerify { // users must set either ServerName or InsecureSkipVerify in the config.
 			config = config.Clone()
-			config.ServerName = uri.Host
+			config.ServerName = c.Host
 		}
 
-		if len(c.ClientFingerprint) != 0 {
-			if fingerprint, exists := tlsC.GetFingerprint(c.ClientFingerprint); exists {
-				utlsConn := tlsC.UClient(conn, config, fingerprint)
-				if err = utlsConn.BuildWebsocketHandshakeState(); err != nil {
-					return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
-				}
-				conn = utlsConn
+		if clientFingerprint, ok := tlsC.GetFingerprint(c.ClientFingerprint); ok {
+			tlsConn := tlsC.UClient(conn, tlsC.UConfig(config), clientFingerprint)
+			if err = tlsC.BuildWebsocketHandshakeState(tlsConn); err != nil {
+				return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
 			}
-		} else {
-			conn = tls.Client(conn, config)
-		}
-
-		if tlsConn, ok := conn.(interface {
-			HandshakeContext(ctx context.Context) error
-		}); ok {
-			if err = tlsConn.HandshakeContext(ctx); err != nil {
+			err = tlsConn.HandshakeContext(ctx)
+			if err != nil {
 				return nil, err
 			}
+			conn = tlsConn
+		} else {
+			tlsConn := tls.Client(conn, config)
+			err = tlsConn.HandshakeContext(ctx)
+			if err != nil {
+				return nil, err
+			}
+			conn = tlsConn
 		}
 	}
 
@@ -467,7 +466,7 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 		}
 	}
 
-	conn = newWebsocketConn(conn, ws.StateClientSide)
+	conn = newWebsocketConn(bufferedConn, ws.StateClientSide)
 	// websocketConn can't correct handle ReadDeadline
 	// so call N.NewDeadlineConn to add a safe wrapper
 	return N.NewDeadlineConn(conn), nil
@@ -555,7 +554,7 @@ func StreamUpgradedWebsocketConn(w http.ResponseWriter, r *http.Request) (net.Co
 		w.Header().Set("Sec-Websocket-Accept", getSecAccept(r.Header.Get("Sec-WebSocket-Key")))
 	}
 	w.WriteHeader(http.StatusSwitchingProtocols)
-	if flusher, isFlusher := w.(interface{ FlushError() error }); isFlusher {
+	if flusher, isFlusher := w.(interface{ FlushError() error }); isFlusher && writeHeaderShouldFlush {
 		err = flusher.FlushError()
 		if err != nil {
 			return nil, fmt.Errorf("flush response: %w", err)

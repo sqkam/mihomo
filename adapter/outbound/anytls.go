@@ -11,7 +11,6 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/component/resolver"
-	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/anytls"
 	"github.com/metacubex/mihomo/transport/vmess"
@@ -44,9 +43,7 @@ type AnyTLSOption struct {
 	MinIdleSession           int      `proxy:"min-idle-session,omitempty"`
 }
 
-func (t *AnyTLS) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	options := t.Base.DialOptions(opts...)
-	t.dialer.SetDialer(dialer.NewDialer(options...))
+func (t *AnyTLS) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	c, err := t.client.CreateProxy(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 	if err != nil {
 		return nil, err
@@ -54,10 +51,8 @@ func (t *AnyTLS) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 	return NewConn(c, t), nil
 }
 
-func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
+func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	// create tcp
-	options := t.Base.DialOptions(opts...)
-	t.dialer.SetDialer(dialer.NewDialer(options...))
 	c, err := t.client.CreateProxy(ctx, uot.RequestDestination(2))
 	if err != nil {
 		return nil, err
@@ -94,8 +89,23 @@ func (t *AnyTLS) Close() error {
 
 func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
+	outbound := &AnyTLS{
+		Base: &Base{
+			name:   option.Name,
+			addr:   addr,
+			tp:     C.AnyTLS,
+			udp:    option.UDP,
+			tfo:    option.TFO,
+			mpTcp:  option.MPTCP,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
+		},
+		option: &option,
+	}
 
-	singDialer := proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer())
+	singDialer := proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer(outbound.DialOptions()...))
+	outbound.dialer = singDialer
 
 	tOption := anytls.ClientConfig{
 		Password:                 option.Password,
@@ -115,27 +125,10 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 	if tlsConfig.Host == "" {
 		tlsConfig.Host = option.Server
 	}
-	if tlsC.HaveGlobalFingerprint() && len(option.ClientFingerprint) == 0 {
-		tlsConfig.ClientFingerprint = tlsC.GetGlobalFingerprint()
-	}
 	tOption.TLSConfig = tlsConfig
 
-	outbound := &AnyTLS{
-		Base: &Base{
-			name:   option.Name,
-			addr:   addr,
-			tp:     C.AnyTLS,
-			udp:    option.UDP,
-			tfo:    option.TFO,
-			mpTcp:  option.MPTCP,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: C.NewDNSPrefer(option.IPVersion),
-		},
-		client: anytls.NewClient(context.TODO(), tOption),
-		option: &option,
-		dialer: singDialer,
-	}
+	client := anytls.NewClient(context.TODO(), tOption)
+	outbound.client = client
 
 	return outbound, nil
 }

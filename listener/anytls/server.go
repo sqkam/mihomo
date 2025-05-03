@@ -12,7 +12,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/buf"
-	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/ca"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing"
@@ -43,7 +43,7 @@ func New(config LC.AnyTLSServer, tunnel C.Tunnel, additions ...inbound.Addition)
 
 	tlsConfig := &tls.Config{}
 	if config.Certificate != "" && config.PrivateKey != "" {
-		cert, err := N.ParseCert(config.Certificate, config.PrivateKey, C.Path)
+		cert, err := ca.LoadTLSKeyPair(config.Certificate, config.PrivateKey, C.Path)
 		if err != nil {
 			return nil, err
 		}
@@ -85,6 +85,11 @@ func New(config LC.AnyTLSServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		l, err := inbound.Listen("tcp", addr)
 		if err != nil {
 			return nil, err
+		}
+		if len(tlsConfig.Certificates) > 0 {
+			l = tls.NewListener(l, tlsConfig)
+		} else {
+			return nil, errors.New("disallow using AnyTLS without certificates config")
 		}
 		sl.listeners = append(sl.listeners, l)
 
@@ -130,8 +135,6 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 
 func (l *Listener) HandleConn(conn net.Conn, h *sing.ListenerHandler) {
 	ctx := context.TODO()
-
-	conn = tls.Server(conn, l.tlsConfig)
 	defer conn.Close()
 
 	b := buf.NewPacket()
