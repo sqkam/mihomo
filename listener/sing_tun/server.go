@@ -24,11 +24,11 @@ import (
 	"golang.org/x/exp/constraints"
 
 	tun "github.com/metacubex/sing-tun"
-	"github.com/metacubex/sing-tun/control"
-	"github.com/sagernet/sing/common"
-	E "github.com/sagernet/sing/common/exceptions"
-	F "github.com/sagernet/sing/common/format"
-	"github.com/sagernet/sing/common/ranges"
+	"github.com/metacubex/sing/common"
+	"github.com/metacubex/sing/common/control"
+	E "github.com/metacubex/sing/common/exceptions"
+	F "github.com/metacubex/sing/common/format"
+	"github.com/metacubex/sing/common/ranges"
 
 	"go4.org/netipx"
 	"golang.org/x/exp/maps"
@@ -347,6 +347,8 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		IPRoute2RuleIndex:        ruleIndex,
 		AutoRedirectInputMark:    inputMark,
 		AutoRedirectOutputMark:   outputMark,
+		Inet4LoopbackAddress:     common.Filter(options.LoopbackAddress, netip.Addr.Is4),
+		Inet6LoopbackAddress:     common.Filter(options.LoopbackAddress, netip.Addr.Is6),
 		StrictRoute:              options.StrictRoute,
 		Inet4RouteAddress:        inet4RouteAddress,
 		Inet6RouteAddress:        inet6RouteAddress,
@@ -363,6 +365,8 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		ExcludePackage:           options.ExcludePackage,
 		FileDescriptor:           options.FileDescriptor,
 		InterfaceMonitor:         defaultInterfaceMonitor,
+		EXP_RecvMsgX:             options.RecvMsgX,
+		EXP_SendMsgX:             options.SendMsgX,
 	}
 
 	if options.AutoRedirect {

@@ -8,7 +8,6 @@ import (
 	"github.com/sqkam/hysteriaclient/app"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"runtime"
 	"strconv"
@@ -18,10 +17,10 @@ import (
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/queue"
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/common/xsync"
 	"github.com/metacubex/mihomo/component/ca"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
-	"github.com/puzpuzpuz/xsync/v3"
 )
 
 var UnifiedDelay = atomic.NewBool(false)
@@ -39,7 +38,7 @@ type Proxy struct {
 	C.ProxyAdapter
 	alive   atomic.Bool
 	history *queue.Queue[C.DelayHistory]
-	extra   *xsync.MapOf[string, *internalProxyState]
+	extra   xsync.Map[string, *internalProxyState]
 }
 
 // Adapter implements C.Proxy
@@ -305,7 +304,7 @@ func NewProxy(adapter C.ProxyAdapter) *Proxy {
 		ProxyAdapter: adapter,
 		history:      queue.New[C.DelayHistory](defaultHistoriesNum),
 		alive:        atomic.NewBool(true),
-		extra:        xsync.NewMapOf[string, *internalProxyState]()}
+	}
 }
 
 func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
@@ -326,15 +325,7 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 			return
 		}
 	}
-	uintPort, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		return
-	}
 
-	addr = C.Metadata{
-		Host:    u.Hostname(),
-		DstIP:   netip.Addr{},
-		DstPort: uint16(uintPort),
-	}
+	err = addr.SetRemoteAddress(net.JoinHostPort(u.Hostname(), port))
 	return
 }

@@ -14,7 +14,7 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 
 	"github.com/gofrs/uuid/v5"
-	"github.com/sagernet/sing/common"
+	"github.com/metacubex/sing/common"
 )
 
 var ErrNotTLS13 = errors.New("XTLS Vision based on TLS 1.3 outer connection")
@@ -41,6 +41,12 @@ func NewConn(conn connWithUpstream, userUUID *uuid.UUID) (*Conn, error) {
 	switch underlying := conn.Upstream().(type) {
 	case *gotls.Conn:
 		//log.Debugln("type tls")
+		c.Conn = underlying.NetConn()
+		c.tlsConn = underlying
+		t = reflect.TypeOf(underlying).Elem()
+		p = unsafe.Pointer(underlying)
+	case *tlsC.Conn:
+		//log.Debugln("type *tlsC.Conn")
 		c.Conn = underlying.NetConn()
 		c.tlsConn = underlying
 		t = reflect.TypeOf(underlying).Elem()

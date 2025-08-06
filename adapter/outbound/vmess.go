@@ -15,8 +15,8 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/ech"
 	"github.com/metacubex/mihomo/component/proxydialer"
-	"github.com/metacubex/mihomo/component/resolver"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/ntp"
@@ -25,7 +25,7 @@ import (
 
 	vmess "github.com/metacubex/sing-vmess"
 	"github.com/metacubex/sing-vmess/packetaddr"
-	M "github.com/sagernet/sing/common/metadata"
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 var ErrUDPRemoteAddrMismatch = errors.New("udp packet dropped due to mismatched remote address")
@@ -41,6 +41,7 @@ type Vmess struct {
 	transport    *gun.TransportWrap
 
 	realityConfig *tlsC.RealityConfig
+	echConfig     *ech.Config
 }
 
 type VmessOption struct {
@@ -58,6 +59,7 @@ type VmessOption struct {
 	SkipCertVerify      bool           `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint         string         `proxy:"fingerprint,omitempty"`
 	ServerName          string         `proxy:"servername,omitempty"`
+	ECHOpts             ECHOptions     `proxy:"ech-opts,omitempty"`
 	RealityOpts         RealityOptions `proxy:"reality-opts,omitempty"`
 	HTTPOpts            HTTPOptions    `proxy:"http-opts,omitempty"`
 	HTTP2Opts           HTTP2Options   `proxy:"h2-opts,omitempty"`
@@ -109,6 +111,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			V2rayHttpUpgrade:         v.option.WSOpts.V2rayHttpUpgrade,
 			V2rayHttpUpgradeFastOpen: v.option.WSOpts.V2rayHttpUpgradeFastOpen,
 			ClientFingerprint:        v.option.ClientFingerprint,
+			ECHConfig:                v.echConfig,
 			Headers:                  http.Header{},
 		}
 
@@ -146,6 +149,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				Host:              host,
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
+				ECH:               v.echConfig,
 				Reality:           v.realityConfig,
 				NextProtos:        v.option.ALPN,
 			}
@@ -195,7 +199,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 
 		c, err = mihomoVMess.StreamH2Conn(ctx, c, h2Opts)
 	case "grpc":
-		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.realityConfig)
+		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.echConfig, v.realityConfig)
 	default:
 		// handle TLS
 		if v.option.TLS {
@@ -205,6 +209,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				SkipCertVerify:    v.option.SkipCertVerify,
 				FingerPrint:       v.option.Fingerprint,
 				ClientFingerprint: v.option.ClientFingerprint,
+				ECH:               v.echConfig,
 				Reality:           v.realityConfig,
 				NextProtos:        v.option.ALPN,
 			}
@@ -324,13 +329,8 @@ func (v *Vmess) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	// vmess use stream-oriented udp with a special address, so we need a net.UDPAddr
-	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(ctx, metadata.Host)
-		if err != nil {
-			return nil, errors.New("can't resolve ip")
-		}
-		metadata.DstIP = ip
+	if err = v.ResolveUDP(ctx, metadata); err != nil {
+		return nil, err
 	}
 	var c net.Conn
 	// gun transport
@@ -361,13 +361,8 @@ func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		}
 	}
 
-	// vmess use stream-oriented udp with a special address, so we need a net.UDPAddr
-	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(ctx, metadata.Host)
-		if err != nil {
-			return nil, errors.New("can't resolve ip")
-		}
-		metadata.DstIP = ip
+	if err = v.ResolveUDP(ctx, metadata); err != nil {
+		return nil, err
 	}
 
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
@@ -407,13 +402,8 @@ func (v *Vmess) Close() error {
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (v *Vmess) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	// vmess use stream-oriented udp with a special address, so we need a net.UDPAddr
-	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(ctx, metadata.Host)
-		if err != nil {
-			return nil, errors.New("can't resolve ip")
-		}
-		metadata.DstIP = ip
+	if err = v.ResolveUDP(ctx, metadata); err != nil {
+		return nil, err
 	}
 
 	if pc, ok := c.(net.PacketConn); ok {
@@ -474,6 +464,11 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		return nil, err
 	}
 
+	v.echConfig, err = v.option.ECHOpts.Parse()
+	if err != nil {
+		return nil, err
+	}
+
 	switch option.Network {
 	case "h2":
 		if len(option.HTTP2Opts.Host) == 0 {
@@ -522,7 +517,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		v.gunTLSConfig = tlsConfig
 		v.gunConfig = gunConfig
 
-		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint, v.realityConfig)
+		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint, v.echConfig, v.realityConfig)
 	}
 
 	return v, nil

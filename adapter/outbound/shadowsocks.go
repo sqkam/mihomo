@@ -2,7 +2,6 @@ package outbound
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -11,7 +10,6 @@ import (
 	"github.com/metacubex/mihomo/common/structure"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
-	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	gost "github.com/metacubex/mihomo/transport/gost-plugin"
 	"github.com/metacubex/mihomo/transport/restls"
@@ -20,9 +18,9 @@ import (
 	v2rayObfs "github.com/metacubex/mihomo/transport/v2ray-plugin"
 
 	shadowsocks "github.com/metacubex/sing-shadowsocks2"
-	"github.com/sagernet/sing/common/bufio"
-	M "github.com/sagernet/sing/common/metadata"
-	"github.com/sagernet/sing/common/uot"
+	"github.com/metacubex/sing/common/bufio"
+	M "github.com/metacubex/sing/common/metadata"
+	"github.com/metacubex/sing/common/uot"
 )
 
 type ShadowSocks struct {
@@ -64,6 +62,7 @@ type v2rayObfsOption struct {
 	Host                     string            `obfs:"host,omitempty"`
 	Path                     string            `obfs:"path,omitempty"`
 	TLS                      bool              `obfs:"tls,omitempty"`
+	ECHOpts                  ECHOptions        `obfs:"ech-opts,omitempty"`
 	Fingerprint              string            `obfs:"fingerprint,omitempty"`
 	Headers                  map[string]string `obfs:"headers,omitempty"`
 	SkipCertVerify           bool              `obfs:"skip-cert-verify,omitempty"`
@@ -77,6 +76,7 @@ type gostObfsOption struct {
 	Host           string            `obfs:"host,omitempty"`
 	Path           string            `obfs:"path,omitempty"`
 	TLS            bool              `obfs:"tls,omitempty"`
+	ECHOpts        ECHOptions        `obfs:"ech-opts,omitempty"`
 	Fingerprint    string            `obfs:"fingerprint,omitempty"`
 	Headers        map[string]string `obfs:"headers,omitempty"`
 	SkipCertVerify bool              `obfs:"skip-cert-verify,omitempty"`
@@ -200,6 +200,9 @@ func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dial
 			return nil, err
 		}
 	}
+	if err = ss.ResolveUDP(ctx, metadata); err != nil {
+		return nil, err
+	}
 	addr, err := resolveUDPAddr(ctx, "udp", ss.addr, ss.prefer)
 	if err != nil {
 		return nil, err
@@ -228,15 +231,9 @@ func (ss *ShadowSocks) ProxyInfo() C.ProxyInfo {
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	if ss.option.UDPOverTCP {
-		// ss uot use stream-oriented udp with a special address, so we need a net.UDPAddr
-		if !metadata.Resolved() {
-			ip, err := resolver.ResolveIP(ctx, metadata.Host)
-			if err != nil {
-				return nil, errors.New("can't resolve ip")
-			}
-			metadata.DstIP = ip
+		if err = ss.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
 		}
-
 		destination := M.SocksaddrFromNet(metadata.UDPAddr())
 		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
 			return newPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
@@ -303,6 +300,12 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			v2rayOption.TLS = true
 			v2rayOption.SkipCertVerify = opts.SkipCertVerify
 			v2rayOption.Fingerprint = opts.Fingerprint
+
+			echConfig, err := opts.ECHOpts.Parse()
+			if err != nil {
+				return nil, fmt.Errorf("ss %s initialize v2ray-plugin error: %w", addr, err)
+			}
+			v2rayOption.ECHConfig = echConfig
 		}
 	} else if option.Plugin == "gost-plugin" {
 		opts := gostObfsOption{Host: "bing.com", Mux: true}
@@ -325,6 +328,12 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			gostOption.TLS = true
 			gostOption.SkipCertVerify = opts.SkipCertVerify
 			gostOption.Fingerprint = opts.Fingerprint
+
+			echConfig, err := opts.ECHOpts.Parse()
+			if err != nil {
+				return nil, fmt.Errorf("ss %s initialize gost-plugin error: %w", addr, err)
+			}
+			gostOption.ECHConfig = echConfig
 		}
 	} else if option.Plugin == shadowtls.Mode {
 		obfsMode = shadowtls.Mode
