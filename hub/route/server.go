@@ -3,7 +3,7 @@ package route
 import (
 	"bytes"
 	"crypto/subtle"
-	"crypto/tls"
+
 	"embed"
 	"encoding/json"
 	"net"

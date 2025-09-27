@@ -36,12 +36,6 @@ import (
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
 	"github.com/sqkam/hysteriaclient/app"
-	"net"
-	"net/netip"
-	"net/url"
-	"strings"
-	"time"
-	_ "unsafe"
 
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"golang.org/x/exp/slices"
