@@ -74,6 +74,7 @@ type VlessOption struct {
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
+
 	switch v.option.Network {
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
@@ -250,7 +251,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 				for {
 
 					var c net.Conn
-					timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*3)
+					timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*100)
 					c, err = v.dialer.DialContext(timeoutCtx, "tcp", v.addr)
 					if err != nil {
 						cancel()
@@ -326,10 +327,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		return nil, err
 	}
 
-	c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
-	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
-	}
+	c = <-ch
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
