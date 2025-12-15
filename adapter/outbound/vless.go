@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/metacubex/mihomo/common/convert"
 	N "github.com/metacubex/mihomo/common/net"
@@ -166,6 +168,7 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 }
 
 func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
+	t := time.Now()
 	if ctx.Done() != nil {
 		done := N.SetupContextForConn(ctx, c)
 		defer done(&err)
@@ -176,6 +179,7 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			return
 		}
 	}
+
 	if metadata.NetWork == C.UDP {
 		if v.option.PacketAddr {
 			metadata = &C.Metadata{
@@ -194,6 +198,8 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	} else {
 		conn, err = v.client.StreamConn(c, parseVlessAddr(metadata, false))
 	}
+
+	fmt.Printf("asfsadfasdfasdfasdfasdfsdf5 %v\n", time.Since(t))
 	if err != nil {
 		conn = nil
 	}
@@ -230,9 +236,40 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 	return conn, nil
 }
 
+var ch = make(chan net.Conn, 10)
+var once = sync.Once{}
+
 // DialContext implements C.ProxyAdapter
 func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	var c net.Conn
+	once.Do(func() {
+		ctx := context.Background()
+		//metadata:=metadata
+		for i := 0; i < 5; i++ {
+			go func() {
+				for {
+
+					var c net.Conn
+					timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*3)
+					c, err = v.dialer.DialContext(timeoutCtx, "tcp", v.addr)
+					if err != nil {
+						cancel()
+						continue
+					}
+
+					c, err = v.streamTLSConn(ctx, c, false)
+					if err != nil {
+						continue
+					}
+
+					ch <- c
+				}
+
+			}()
+
+		}
+	})
+
 	// gun transport
 	if v.transport != nil {
 		c, err = gun.StreamGunWithTransport(v.transport, v.gunConfig)
@@ -250,17 +287,13 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 		return NewConn(c, v), nil
 	}
-	c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
-	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
-	}
+	c = <-ch
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
-
-	c, err = v.StreamConnContext(ctx, c, metadata)
+	c, err = v.streamConnContext(ctx, c, metadata)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+		return nil, err
 	}
 	return NewConn(c, v), err
 }
