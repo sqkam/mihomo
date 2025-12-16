@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/metacubex/mihomo/common/convert"
 	"net"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/convert"
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/ca"
@@ -35,10 +35,11 @@ type Vless struct {
 	encryption *encryption.ClientInstance
 
 	// for gun mux
-	gunTLSConfig *tls.Config
-	gunConfig    *gun.Config
-	transport    *gun.TransportWrap
-
+	gunTLSConfig  *tls.Config
+	gunConfig     *gun.Config
+	transport     *gun.TransportWrap
+	ch            chan net.Conn
+	once          sync.Once
 	realityConfig *tlsC.RealityConfig
 	echConfig     *ech.Config
 }
@@ -75,96 +76,6 @@ type VlessOption struct {
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 
-	switch v.option.Network {
-	case "ws":
-		host, port, _ := net.SplitHostPort(v.addr)
-		wsOpts := &vmess.WebsocketConfig{
-			Host:                     host,
-			Port:                     port,
-			Path:                     v.option.WSOpts.Path,
-			MaxEarlyData:             v.option.WSOpts.MaxEarlyData,
-			EarlyDataHeaderName:      v.option.WSOpts.EarlyDataHeaderName,
-			V2rayHttpUpgrade:         v.option.WSOpts.V2rayHttpUpgrade,
-			V2rayHttpUpgradeFastOpen: v.option.WSOpts.V2rayHttpUpgradeFastOpen,
-			ClientFingerprint:        v.option.ClientFingerprint,
-			ECHConfig:                v.echConfig,
-			Headers:                  http.Header{},
-		}
-
-		if len(v.option.WSOpts.Headers) != 0 {
-			for key, value := range v.option.WSOpts.Headers {
-				wsOpts.Headers.Add(key, value)
-			}
-		}
-		if v.option.TLS {
-			wsOpts.TLS = true
-			wsOpts.TLSConfig, err = ca.GetTLSConfig(ca.Option{
-				TLSConfig: &tls.Config{
-					MinVersion:         tls.VersionTLS12,
-					ServerName:         host,
-					InsecureSkipVerify: v.option.SkipCertVerify,
-					NextProtos:         []string{"http/1.1"},
-				},
-				Fingerprint: v.option.Fingerprint,
-				Certificate: v.option.Certificate,
-				PrivateKey:  v.option.PrivateKey,
-			})
-			if err != nil {
-				return nil, err
-			}
-
-			if v.option.ServerName != "" {
-				wsOpts.TLSConfig.ServerName = v.option.ServerName
-			} else if host := wsOpts.Headers.Get("Host"); host != "" {
-				wsOpts.TLSConfig.ServerName = host
-			}
-		} else {
-			if host := wsOpts.Headers.Get("Host"); host == "" {
-				wsOpts.Headers.Set("Host", convert.RandHost())
-				convert.SetUserAgent(wsOpts.Headers)
-			}
-		}
-		c, err = vmess.StreamWebsocketConn(ctx, c, wsOpts)
-	case "http":
-		// readability first, so just copy default TLS logic
-		c, err = v.streamTLSConn(ctx, c, false)
-		if err != nil {
-			return nil, err
-		}
-
-		host, _, _ := net.SplitHostPort(v.addr)
-		httpOpts := &vmess.HTTPConfig{
-			Host:    host,
-			Method:  v.option.HTTPOpts.Method,
-			Path:    v.option.HTTPOpts.Path,
-			Headers: v.option.HTTPOpts.Headers,
-		}
-
-		c = vmess.StreamHTTPConn(c, httpOpts)
-	case "h2":
-		c, err = v.streamTLSConn(ctx, c, true)
-		if err != nil {
-			return nil, err
-		}
-
-		h2Opts := &vmess.H2Config{
-			Hosts: v.option.HTTP2Opts.Host,
-			Path:  v.option.HTTP2Opts.Path,
-		}
-
-		c, err = vmess.StreamH2Conn(ctx, c, h2Opts)
-	case "grpc":
-		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.echConfig, v.realityConfig)
-	default:
-		// default tcp network
-		// handle TLS
-		c, err = v.streamTLSConn(ctx, c, false)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
 	return v.streamConnContext(ctx, c, metadata)
 }
 
@@ -173,12 +84,6 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	if ctx.Done() != nil {
 		done := N.SetupContextForConn(ctx, c)
 		defer done(&err)
-	}
-	if v.encryption != nil {
-		c, err = v.encryption.Handshake(c)
-		if err != nil {
-			return
-		}
 	}
 
 	if metadata.NetWork == C.UDP {
@@ -237,33 +142,124 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 	return conn, nil
 }
 
-var ch = make(chan net.Conn, 10)
-var once = sync.Once{}
-
 // DialContext implements C.ProxyAdapter
 func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	var c net.Conn
-	once.Do(func() {
+	v.once.Do(func() {
 		ctx := context.Background()
 		//metadata:=metadata
 		for i := 0; i < 5; i++ {
 			go func() {
+				continueFailure := -1
 				for {
-
+					continueFailure++
+					if continueFailure > 32 {
+						time.Sleep(time.Minute * 3 * 5)
+					}
 					var c net.Conn
 					timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*100)
-					c, err = v.dialer.DialContext(timeoutCtx, "tcp", v.addr)
+					c, err := v.dialer.DialContext(timeoutCtx, "tcp", v.addr)
 					if err != nil {
 						cancel()
 						continue
 					}
 
-					c, err = v.streamTLSConn(ctx, c, false)
+					switch v.option.Network {
+					case "ws":
+						host, port, _ := net.SplitHostPort(v.addr)
+						wsOpts := &vmess.WebsocketConfig{
+							Host:                     host,
+							Port:                     port,
+							Path:                     v.option.WSOpts.Path,
+							MaxEarlyData:             v.option.WSOpts.MaxEarlyData,
+							EarlyDataHeaderName:      v.option.WSOpts.EarlyDataHeaderName,
+							V2rayHttpUpgrade:         v.option.WSOpts.V2rayHttpUpgrade,
+							V2rayHttpUpgradeFastOpen: v.option.WSOpts.V2rayHttpUpgradeFastOpen,
+							ClientFingerprint:        v.option.ClientFingerprint,
+							ECHConfig:                v.echConfig,
+							Headers:                  http.Header{},
+						}
+
+						if len(v.option.WSOpts.Headers) != 0 {
+							for key, value := range v.option.WSOpts.Headers {
+								wsOpts.Headers.Add(key, value)
+							}
+						}
+						if v.option.TLS {
+							wsOpts.TLS = true
+							wsOpts.TLSConfig, err = ca.GetTLSConfig(ca.Option{
+								TLSConfig: &tls.Config{
+									MinVersion:         tls.VersionTLS12,
+									ServerName:         host,
+									InsecureSkipVerify: v.option.SkipCertVerify,
+									NextProtos:         []string{"http/1.1"},
+								},
+								Fingerprint: v.option.Fingerprint,
+								Certificate: v.option.Certificate,
+								PrivateKey:  v.option.PrivateKey,
+							})
+							if err != nil {
+								continue
+							}
+
+							if v.option.ServerName != "" {
+								wsOpts.TLSConfig.ServerName = v.option.ServerName
+							} else if host := wsOpts.Headers.Get("Host"); host != "" {
+								wsOpts.TLSConfig.ServerName = host
+							}
+						} else {
+							if host := wsOpts.Headers.Get("Host"); host == "" {
+								wsOpts.Headers.Set("Host", convert.RandHost())
+								convert.SetUserAgent(wsOpts.Headers)
+							}
+						}
+						c, err = vmess.StreamWebsocketConn(ctx, c, wsOpts)
+					case "http":
+						// readability first, so just copy default TLS logic
+						c, err = v.streamTLSConn(ctx, c, false)
+						if err != nil {
+							continue
+						}
+
+						host, _, _ := net.SplitHostPort(v.addr)
+						httpOpts := &vmess.HTTPConfig{
+							Host:    host,
+							Method:  v.option.HTTPOpts.Method,
+							Path:    v.option.HTTPOpts.Path,
+							Headers: v.option.HTTPOpts.Headers,
+						}
+
+						c = vmess.StreamHTTPConn(c, httpOpts)
+					case "h2":
+						c, err = v.streamTLSConn(ctx, c, true)
+						if err != nil {
+							continue
+						}
+
+						h2Opts := &vmess.H2Config{
+							Hosts: v.option.HTTP2Opts.Host,
+							Path:  v.option.HTTP2Opts.Path,
+						}
+
+						c, err = vmess.StreamH2Conn(ctx, c, h2Opts)
+					case "grpc":
+						c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.echConfig, v.realityConfig)
+					default:
+						// default tcp network
+						// handle TLS
+						c, err = v.streamTLSConn(ctx, c, false)
+					}
 					if err != nil {
 						continue
 					}
-
-					ch <- c
+					if v.encryption != nil {
+						c, err = v.encryption.Handshake(c)
+						if err != nil {
+							continue
+						}
+					}
+					continueFailure = -1
+					v.ch <- c
 				}
 
 			}()
@@ -288,7 +284,15 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 		return NewConn(c, v), nil
 	}
-	c = <-ch
+	var ok bool
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case c, ok = <-v.ch:
+		if !ok {
+			return nil, fmt.Errorf("vless dial channel closed")
+		}
+	}
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -326,8 +330,16 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	if err = v.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
+	var ok bool
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case c, ok = <-v.ch:
+		if !ok {
+			return nil, fmt.Errorf("vless dial channel closed")
+		}
+	}
 
-	c = <-ch
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -459,6 +471,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 		},
 		client: client,
 		option: &option,
+		ch:     make(chan net.Conn, 10),
 	}
 	v.dialer = option.NewDialer(v.DialOptions())
 
