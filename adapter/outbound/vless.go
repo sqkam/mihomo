@@ -2,12 +2,10 @@ package outbound
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"github.com/metacubex/mihomo/common/convert"
 	"github.com/metacubex/mihomo/component/keepalive"
 	"net"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -23,9 +21,11 @@ import (
 	"github.com/metacubex/mihomo/transport/vless/encryption"
 	"github.com/metacubex/mihomo/transport/vmess"
 
+	"github.com/metacubex/http"
 	vmessSing "github.com/metacubex/sing-vmess"
 	"github.com/metacubex/sing-vmess/packetaddr"
 	M "github.com/metacubex/sing/common/metadata"
+	"github.com/metacubex/tls"
 )
 
 type Vless struct {
