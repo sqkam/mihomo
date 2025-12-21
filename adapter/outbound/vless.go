@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/metacubex/mihomo/common/convert"
+	"github.com/metacubex/mihomo/component/keepalive"
 	"net"
 	"net/http"
 	"strconv"
@@ -148,19 +149,20 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 	v.once.Do(func() {
 		ctx := context.Background()
 		//metadata:=metadata
-		for i := 0; i < 5; i++ {
+		for i := 0; i < 8; i++ {
 			go func() {
 				continueFailure := -1
 				for {
 					continueFailure++
-					if continueFailure > 32 {
-						time.Sleep(time.Minute * 3 * 5)
-					}
+
+					time.Sleep(time.Millisecond * 50 * time.Duration(continueFailure))
+
 					var c net.Conn
-					timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*100)
-					c, err := v.dialer.DialContext(timeoutCtx, "tcp", v.addr)
+
+					//timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*100)
+					c, err := v.dialer.DialContext(ctx, "tcp", v.addr)
 					if err != nil {
-						cancel()
+						//cancel()
 						continue
 					}
 
@@ -259,6 +261,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 						}
 					}
 					continueFailure = -1
+					keepalive.TCPKeepAlive(c)
 					v.ch <- c
 				}
 
@@ -300,6 +303,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 	if err != nil {
 		return nil, err
 	}
+
 	return NewConn(c, v), err
 }
 
