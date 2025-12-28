@@ -7,7 +7,6 @@ import (
 	"github.com/metacubex/mihomo/component/keepalive"
 	"net"
 	"strconv"
-	"sync"
 	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
@@ -36,13 +35,15 @@ type Vless struct {
 	encryption *encryption.ClientInstance
 
 	// for gun mux
-	gunTLSConfig  *tls.Config
-	gunConfig     *gun.Config
-	transport     *gun.TransportWrap
-	ch            chan net.Conn
-	once          sync.Once
-	realityConfig *tlsC.RealityConfig
-	echConfig     *ech.Config
+	gunTLSConfig *tls.Config
+	gunConfig    *gun.Config
+	transport    *gun.TransportWrap
+
+	realityConfig     *tlsC.RealityConfig
+	echConfig         *ech.Config
+	preConnCh         chan net.Conn
+	preConnContext    context.Context
+	preConnCancelFunc context.CancelFunc
 }
 
 type VlessOption struct {
@@ -144,7 +145,7 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 }
 
 func (v *Vless) getConn() (c net.Conn, err error) {
-	ctx := context.Background()
+	ctx := v.preConnContext
 
 	//timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*100)
 	c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
@@ -252,30 +253,6 @@ func (v *Vless) getConn() (c net.Conn, err error) {
 // DialContext implements C.ProxyAdapter
 func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	var c net.Conn
-	v.once.Do(func() {
-		for i := 0; i < 8; i++ {
-			go func() {
-				continueFailure := -1
-				for {
-					continueFailure++
-
-					time.Sleep(time.Millisecond * 50 * time.Duration(continueFailure))
-
-					preConn, err := v.getConn()
-					if err != nil {
-						// log
-						continue
-					}
-
-					continueFailure = -1
-					keepalive.TCPKeepAlive(preConn)
-					v.ch <- preConn
-				}
-
-			}()
-
-		}
-	})
 
 	// gun transport
 	if v.transport != nil {
@@ -298,7 +275,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case c, ok = <-v.ch:
+	case c, ok = <-v.preConnCh:
 		if !ok {
 			return nil, fmt.Errorf("vless dial channel closed")
 		}
@@ -345,7 +322,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case c, ok = <-v.ch:
+	case c, ok = <-v.preConnCh:
 		if !ok {
 			return nil, fmt.Errorf("vless dial channel closed")
 		}
@@ -402,6 +379,9 @@ func (v *Vless) ProxyInfo() C.ProxyInfo {
 
 // Close implements C.ProxyAdapter
 func (v *Vless) Close() error {
+	v.preConnCancelFunc()
+	close(v.preConnCh)
+
 	if v.transport != nil {
 		return v.transport.Close()
 	}
@@ -465,7 +445,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	preConnContext, preConnCancelFunc := context.WithCancel(context.Background())
 	v := &Vless{
 		Base: &Base{
 			name:   option.Name,
@@ -480,9 +460,11 @@ func NewVless(option VlessOption) (*Vless, error) {
 			rmark:  option.RoutingMark,
 			prefer: option.IPVersion,
 		},
-		client: client,
-		option: &option,
-		ch:     make(chan net.Conn, 10),
+		client:            client,
+		option:            &option,
+		preConnCh:         make(chan net.Conn, 10),
+		preConnContext:    preConnContext,
+		preConnCancelFunc: preConnCancelFunc,
 	}
 	v.dialer = option.NewDialer(v.DialOptions())
 
@@ -547,6 +529,35 @@ func NewVless(option VlessOption) (*Vless, error) {
 		v.gunConfig = gunConfig
 
 		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint, v.echConfig, v.realityConfig)
+	}
+
+	for i := 0; i < 8; i++ {
+		go func() {
+			continueFailure := -1
+			defer func() { recover() }()
+			for {
+
+				select {
+				case <-v.preConnContext.Done():
+					return
+				default:
+
+				}
+
+				continueFailure++
+				time.Sleep(time.Millisecond * 50 * time.Duration(continueFailure))
+				preConn, err := v.getConn()
+				if err != nil {
+					// log
+					continue
+				}
+
+				continueFailure = -1
+				keepalive.TCPKeepAlive(preConn)
+				v.preConnCh <- preConn
+			}
+
+		}()
 	}
 
 	return v, nil
