@@ -530,7 +530,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 
 		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint, v.echConfig, v.realityConfig)
 	}
-
+	// pre conn worker
 	for i := 0; i < 8; i++ {
 		go func() {
 			continueFailure := -1
