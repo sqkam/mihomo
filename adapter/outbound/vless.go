@@ -145,7 +145,8 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 }
 
 func (v *Vless) getConn() (c net.Conn, err error) {
-	ctx := v.preConnContext
+	ctx, cancel := context.WithTimeout(v.preConnContext, time.Second*1)
+	defer cancel()
 
 	//timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*100)
 	c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
