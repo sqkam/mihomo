@@ -83,6 +83,7 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 
 func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
 	t := time.Now()
+	_ = t
 	if ctx.Done() != nil {
 		done := N.SetupContextForConn(ctx, c)
 		defer done(&err)
@@ -107,7 +108,7 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		conn, err = v.client.StreamConn(c, parseVlessAddr(metadata, false))
 	}
 
-	fmt.Printf("asfsadfasdfasdfasdfasdfsdf5 %v\n", time.Since(t))
+	//fmt.Printf("asfsadfasdfasdfasdfasdfsdf5 %v\n", time.Since(t))
 	if err != nil {
 		conn = nil
 	}
@@ -145,12 +146,13 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 }
 
 func (v *Vless) getConn() (c net.Conn, err error) {
-	ctx, cancel := context.WithTimeout(v.preConnContext, time.Second*1)
+	ctx, cancel := context.WithTimeout(v.preConnContext, time.Second*5)
 	defer cancel()
 
 	//timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*100)
 	c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
+		//	fmt.Printf("v.dialer.DialContext(ctx, \"tcp\", v.addr) %v\n",err.Error() )
 		return nil, err
 	}
 
@@ -286,6 +288,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 	}(c)
 	c, err = v.streamConnContext(ctx, c, metadata)
 	if err != nil {
+		//	fmt.Printf("c, err = v.streamConnContext(ctx, c, metadata) %v\n",err.Error() )
 		return nil, err
 	}
 
@@ -546,10 +549,11 @@ func NewVless(option VlessOption) (*Vless, error) {
 				}
 
 				continueFailure++
-				time.Sleep(time.Millisecond * 50 * time.Duration(continueFailure))
+				time.Sleep(time.Millisecond * 10 * time.Duration(continueFailure))
 				preConn, err := v.getConn()
 				if err != nil {
 					// log
+					//	fmt.Printf("preConn, err := v.getConn() %v\n",err.Error() )
 					continue
 				}
 

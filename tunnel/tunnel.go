@@ -615,8 +615,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 	_ = conn.SetReadDeadline(time.Time{}) // reset
 
 	t := time.Now()
+	_ = t
 	handleSocket(conn, remoteConn)
-	fmt.Printf("asfsadfasdfasdfasdfasdfsdf7 %v\n", time.Since(t))
+	// fmt.Printf("asfsadfasdfasdfasdfasdfsdf7 %v\n", time.Since(t))
 }
 
 func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err error) {
