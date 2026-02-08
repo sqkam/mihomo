@@ -3,11 +3,11 @@ package outbound
 import (
 	"context"
 	"fmt"
-	"github.com/metacubex/mihomo/common/convert"
-	"github.com/metacubex/mihomo/component/keepalive"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/metacubex/mihomo/common/convert"
 
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
@@ -27,6 +27,10 @@ import (
 	"github.com/metacubex/tls"
 )
 
+type warpConn struct {
+	net.Conn
+	createdAt int64
+}
 type Vless struct {
 	*Base
 	client *vless.Client
@@ -41,7 +45,7 @@ type Vless struct {
 
 	realityConfig     *tlsC.RealityConfig
 	echConfig         *ech.Config
-	preConnCh         chan net.Conn
+	preConnCh         chan warpConn
 	preConnContext    context.Context
 	preConnCancelFunc context.CancelFunc
 }
@@ -275,14 +279,27 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 		return NewConn(c, v), nil
 	}
 	var ok bool
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case c, ok = <-v.preConnCh:
-		if !ok {
-			return nil, fmt.Errorf("vless dial channel closed")
+	var wConn warpConn
+	// 循环获取2分钟内创建的连接
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case wConn, ok = <-v.preConnCh:
+			if !ok {
+				return nil, fmt.Errorf("vless dial channel closed")
+			}
+			// 检查连接创建时间，如果超过2分钟则关闭并继续获取下一个
+			if time.Now().UnixMilli()-wConn.createdAt > 2*60*1000 {
+				wConn.Close()
+				continue
+			}
+			// 连接在2分钟内，使用这个连接
+			c = wConn.Conn
+			goto connReady
 		}
 	}
+connReady:
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -323,15 +340,27 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		return nil, err
 	}
 	var ok bool
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case c, ok = <-v.preConnCh:
-		if !ok {
-			return nil, fmt.Errorf("vless dial channel closed")
+	var wConn warpConn
+	// 循环获取2分钟内创建的连接
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case wConn, ok = <-v.preConnCh:
+			if !ok {
+				return nil, fmt.Errorf("vless dial channel closed")
+			}
+			// 检查连接创建时间，如果超过2分钟则关闭并继续获取下一个
+			if time.Now().UnixMilli()-wConn.createdAt > 2*60*1000 {
+				wConn.Close()
+				continue
+			}
+			// 连接在2分钟内，使用这个连接
+			c = wConn.Conn
+			goto udpConnReady
 		}
 	}
-
+udpConnReady:
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -466,7 +495,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 		},
 		client:            client,
 		option:            &option,
-		preConnCh:         make(chan net.Conn, 10),
+		preConnCh:         make(chan warpConn, 10),
 		preConnContext:    preConnContext,
 		preConnCancelFunc: preConnCancelFunc,
 	}
@@ -558,8 +587,10 @@ func NewVless(option VlessOption) (*Vless, error) {
 				}
 
 				continueFailure = -1
-				keepalive.TCPKeepAlive(preConn)
-				v.preConnCh <- preConn
+				v.preConnCh <- warpConn{
+					Conn:      preConn,
+					createdAt: time.Now().UnixMilli(),
+				}
 			}
 
 		}()
